@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*) AS \"count!\" FROM orders",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e15c1a23c613d33b151524ae1f958b78d451773f2bbc91ef9e0dbce3485d7708"
+}

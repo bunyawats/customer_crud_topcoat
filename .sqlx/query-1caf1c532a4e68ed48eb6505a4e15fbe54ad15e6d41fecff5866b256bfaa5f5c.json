@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO selected_items (session_hash, resource, item_id)\n        SELECT $1, $2, id FROM UNNEST($3::BIGINT[]) AS id\n        ON CONFLICT DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Text",
+        "Int8Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1caf1c532a4e68ed48eb6505a4e15fbe54ad15e6d41fecff5866b256bfaa5f5c"
+}

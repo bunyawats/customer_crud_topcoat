@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, name, sku, price_cents, description, created_at, updated_at\n        FROM products\n        ORDER BY name\n        ",
+  "query": "\n        SELECT id, first_name, last_name, email, phone, created_at, updated_at\n        FROM customers\n        ORDER BY last_name, first_name, id\n        LIMIT $1 OFFSET $2\n        ",
   "describe": {
     "columns": [
       {
@@ -9,52 +9,52 @@
         "type_info": "Int8",
         "origin": {
           "Table": {
-            "table": "products",
+            "table": "customers",
             "name": "id"
           }
         }
       },
       {
         "ordinal": 1,
-        "name": "name",
+        "name": "first_name",
         "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "products",
-            "name": "name"
+            "table": "customers",
+            "name": "first_name"
           }
         }
       },
       {
         "ordinal": 2,
-        "name": "sku",
+        "name": "last_name",
         "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "products",
-            "name": "sku"
+            "table": "customers",
+            "name": "last_name"
           }
         }
       },
       {
         "ordinal": 3,
-        "name": "price_cents",
-        "type_info": "Int4",
+        "name": "email",
+        "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "products",
-            "name": "price_cents"
+            "table": "customers",
+            "name": "email"
           }
         }
       },
       {
         "ordinal": 4,
-        "name": "description",
+        "name": "phone",
         "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "products",
-            "name": "description"
+            "table": "customers",
+            "name": "phone"
           }
         }
       },
@@ -64,7 +64,7 @@
         "type_info": "Timestamptz",
         "origin": {
           "Table": {
-            "table": "products",
+            "table": "customers",
             "name": "created_at"
           }
         }
@@ -75,14 +75,17 @@
         "type_info": "Timestamptz",
         "origin": {
           "Table": {
-            "table": "products",
+            "table": "customers",
             "name": "updated_at"
           }
         }
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
     },
     "nullable": [
       false,
@@ -94,5 +97,5 @@
       false
     ]
   },
-  "hash": "ea8dfab9b3e32123c258a5a2b67f490db8441ce4cc6032086d6cb1b9c540864f"
+  "hash": "d6bce13eb528ec0fc5749544e78d8511eb31e2d872568f4ac76def487012921f"
 }

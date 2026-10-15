@@ -1,0 +1,98 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, name, sku, price_cents, description, created_at, updated_at\n        FROM products\n        ORDER BY name, id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "products",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "products",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "sku",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "products",
+            "name": "sku"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "price_cents",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "products",
+            "name": "price_cents"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "products",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "products",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "products",
+            "name": "updated_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "9efceac8ede4be16289bbe911d220e6b6b59eabfa9b0ae13d394007d55fd8a9e"
+}

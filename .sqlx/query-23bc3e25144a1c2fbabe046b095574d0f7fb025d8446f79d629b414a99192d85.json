@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT (\n            SELECT COUNT(*) FROM customers c\n            WHERE (c.last_name, c.first_name, c.id) < (t.last_name, t.first_name, t.id)\n        ) AS \"position!\"\n        FROM customers t\n        WHERE t.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "position!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "23bc3e25144a1c2fbabe046b095574d0f7fb025d8446f79d629b414a99192d85"
+}

@@ -2,10 +2,32 @@ use sqlx::PgPool;
 
 use super::models::{Customer, CustomerForm, NewCustomer};
 use super::repositories as repo;
+use crate::bulk::{self, BulkResult};
 use crate::error::AppError;
+use crate::pagination::{self, PAGE_SIZE, Page, PageRequest};
 
 pub async fn list(pool: &PgPool) -> Result<Vec<Customer>, AppError> {
     Ok(repo::list(pool).await?)
+}
+
+/// One page of the list, reusing the cached total when `request` carries a
+/// still-valid `query_id`.
+pub async fn list_page(pool: &PgPool, request: PageRequest) -> Result<Page<Customer>, AppError> {
+    pagination::fetch_page(
+        request,
+        "customers",
+        async || Ok(repo::count(pool).await?),
+        async |limit, offset| Ok(repo::list_page(pool, limit, offset).await?),
+    )
+    .await
+}
+
+/// The 1-based page that shows customer `id` (e.g. a just-created record).
+pub async fn page_of(pool: &PgPool, id: i64) -> Result<i64, AppError> {
+    let position = repo::position_of(pool, id)
+        .await?
+        .ok_or(AppError::NotFound("Customer"))?;
+    Ok(pagination::page_of_position(position, PAGE_SIZE))
 }
 
 pub async fn get(pool: &PgPool, id: i64) -> Result<Customer, AppError> {
@@ -48,6 +70,13 @@ pub async fn delete(pool: &PgPool, id: i64) -> Result<(), AppError> {
     } else {
         Err(AppError::NotFound("Customer"))
     }
+}
+
+/// Deletes each id through [`delete`], so its guards apply per item.
+/// Best-effort: see [`bulk::fan_out`].
+pub async fn bulk_delete(pool: &PgPool, ids: &[i64]) -> Result<Vec<BulkResult>, AppError> {
+    let batch = bulk::prepare_batch(ids)?;
+    bulk::fan_out(&batch, |id| delete(pool, id)).await
 }
 
 /// Domain validation for customer input. Kept separate from `NewCustomer`

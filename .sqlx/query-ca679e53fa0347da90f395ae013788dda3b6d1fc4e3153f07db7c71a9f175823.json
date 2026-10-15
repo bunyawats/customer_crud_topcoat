@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT (\n            SELECT COUNT(*) FROM orders o\n            WHERE (o.created_at, o.id) > (t.created_at, t.id)\n        ) AS \"position!\"\n        FROM orders t\n        WHERE t.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "position!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ca679e53fa0347da90f395ae013788dda3b6d1fc4e3153f07db7c71a9f175823"
+}

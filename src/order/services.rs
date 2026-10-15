@@ -1,7 +1,9 @@
 use sqlx::PgPool;
 
+use crate::bulk::{self, BulkResult};
 use crate::customer::services as customer_service;
 use crate::error::AppError;
+use crate::pagination::{self, PAGE_SIZE, Page, PageRequest};
 use crate::product::services as product_service;
 
 use super::models::{
@@ -9,8 +11,27 @@ use super::models::{
 };
 use super::repositories as repo;
 
-pub async fn list(pool: &PgPool) -> Result<Vec<OrderSummary>, AppError> {
-    Ok(repo::list(pool).await?)
+/// One page of the list, reusing the cached total when `request` carries a
+/// still-valid `query_id`.
+pub async fn list_page(
+    pool: &PgPool,
+    request: PageRequest,
+) -> Result<Page<OrderSummary>, AppError> {
+    pagination::fetch_page(
+        request,
+        "orders",
+        async || Ok(repo::count(pool).await?),
+        async |limit, offset| Ok(repo::list_page(pool, limit, offset).await?),
+    )
+    .await
+}
+
+/// The 1-based page that shows order `id` (e.g. a just-created record).
+pub async fn page_of(pool: &PgPool, id: i64) -> Result<i64, AppError> {
+    let position = repo::position_of(pool, id)
+        .await?
+        .ok_or(AppError::NotFound("Order"))?;
+    Ok(pagination::page_of_position(position, PAGE_SIZE))
 }
 
 pub async fn get(pool: &PgPool, id: i64) -> Result<OrderDetail, AppError> {
@@ -43,6 +64,13 @@ pub async fn delete(pool: &PgPool, id: i64) -> Result<(), AppError> {
     } else {
         Err(AppError::NotFound("Order"))
     }
+}
+
+/// Deletes each id through [`delete`], so its guards apply per item.
+/// Best-effort: see [`bulk::fan_out`].
+pub async fn bulk_delete(pool: &PgPool, ids: &[i64]) -> Result<Vec<BulkResult>, AppError> {
+    let batch = bulk::prepare_batch(ids)?;
+    bulk::fan_out(&batch, |id| delete(pool, id)).await
 }
 
 /// Exposed for `customer::services::delete` to check whether a customer has

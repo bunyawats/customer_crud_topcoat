@@ -9,7 +9,11 @@
 
 #![allow(dead_code)] // each test binary uses a different subset
 
-use std::{path::PathBuf, sync::OnceLock};
+use std::{
+    collections::BTreeMap,
+    path::PathBuf,
+    sync::{Mutex, OnceLock},
+};
 
 use serde::Serialize;
 use sqlx::PgPool;
@@ -46,7 +50,13 @@ fn assets() -> AssetBundle {
     AssetBundle::load_dir(dir).expect("load test asset bundle")
 }
 
-pub struct App(Router);
+/// A test client: the real router plus a cookie jar, so a sequence of
+/// requests shares one session the way a browser tab does. Two `App`s on the
+/// same pool are two separate browsers.
+pub struct App {
+    router: Router,
+    cookies: Mutex<BTreeMap<String, String>>,
+}
 
 pub struct TestResponse {
     pub status: StatusCode,
@@ -56,7 +66,10 @@ pub struct TestResponse {
 
 impl App {
     pub fn new(pool: PgPool) -> Self {
-        App(customer_crud_topcoat::router(pool, assets()))
+        App {
+            router: customer_crud_topcoat::router(pool, assets()),
+            cookies: Mutex::new(BTreeMap::new()),
+        }
     }
 
     async fn send(
@@ -70,6 +83,9 @@ impl App {
         if htmx {
             request = request.header("HX-Request", "true");
         }
+        if let Some(cookie) = self.cookie_header() {
+            request = request.header(header::COOKIE, cookie);
+        }
         let body = match form {
             Some(form) => {
                 request = request.header(header::CONTENT_TYPE, "application/x-www-form-urlencoded");
@@ -77,8 +93,9 @@ impl App {
             }
             None => Body::empty(),
         };
-        let response: Response = self.0.handle(request.body(body).unwrap()).await;
+        let response: Response = self.router.handle(request.body(body).unwrap()).await;
         let (parts, body) = response.into_parts();
+        self.store_cookies(&parts.headers);
         let bytes = to_bytes(body, usize::MAX).await.expect("read body");
         TestResponse {
             status: parts.status,
@@ -106,6 +123,40 @@ impl App {
 
     pub async fn htmx_delete(&self, uri: &str) -> TestResponse {
         self.send(Method::DELETE, uri, true, None).await
+    }
+}
+
+impl App {
+    fn cookie_header(&self) -> Option<String> {
+        let jar = self.cookies.lock().unwrap();
+        (!jar.is_empty()).then(|| {
+            jar.iter()
+                .map(|(name, value)| format!("{name}={value}"))
+                .collect::<Vec<_>>()
+                .join("; ")
+        })
+    }
+
+    /// Keeps `name=value` from each `Set-Cookie`; `Max-Age=0` deletes.
+    fn store_cookies(&self, headers: &HeaderMap) {
+        let mut jar = self.cookies.lock().unwrap();
+        for value in headers.get_all(header::SET_COOKIE) {
+            let value = value.to_str().expect("ASCII Set-Cookie");
+            let pair = value.split(';').next().unwrap_or_default();
+            let Some((name, val)) = pair.split_once('=') else {
+                continue;
+            };
+            if value.contains("Max-Age=0") {
+                jar.remove(name.trim());
+            } else {
+                jar.insert(name.trim().to_string(), val.trim().to_string());
+            }
+        }
+    }
+
+    /// Whether this client currently holds a session cookie.
+    pub fn has_session(&self) -> bool {
+        self.cookies.lock().unwrap().contains_key("__Host-session")
     }
 }
 

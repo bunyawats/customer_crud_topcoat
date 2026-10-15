@@ -2,7 +2,20 @@ use sqlx::PgPool;
 
 use super::models::{NewOrder, NewOrderItem, OrderItemDetail, OrderSummary};
 
-pub async fn list(pool: &PgPool) -> Result<Vec<OrderSummary>, sqlx::Error> {
+pub async fn count(pool: &PgPool) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar!(r#"SELECT COUNT(*) AS "count!" FROM orders"#)
+        .fetch_one(pool)
+        .await
+}
+
+/// One page of orders, newest first. `o.id DESC` breaks `created_at` ties
+/// (rows inserted in one transaction share `now()`), which also keeps
+/// `OFFSET` paging stable.
+pub async fn list_page(
+    pool: &PgPool,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<OrderSummary>, sqlx::Error> {
     sqlx::query_as!(
         OrderSummary,
         r#"
@@ -19,9 +32,30 @@ pub async fn list(pool: &PgPool) -> Result<Vec<OrderSummary>, sqlx::Error> {
         LEFT JOIN order_items oi ON oi.order_id = o.id
         GROUP BY o.id, c.first_name, c.last_name
         ORDER BY o.created_at DESC, o.id DESC
-        "#
+        LIMIT $1 OFFSET $2
+        "#,
+        limit,
+        offset
     )
     .fetch_all(pool)
+    .await
+}
+
+/// 0-based position of order `id` in list order (newest first), or `None`
+/// if it doesn't exist.
+pub async fn position_of(pool: &PgPool, id: i64) -> Result<Option<i64>, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"
+        SELECT (
+            SELECT COUNT(*) FROM orders o
+            WHERE (o.created_at, o.id) > (t.created_at, t.id)
+        ) AS "position!"
+        FROM orders t
+        WHERE t.id = $1
+        "#,
+        id
+    )
+    .fetch_optional(pool)
     .await
 }
 

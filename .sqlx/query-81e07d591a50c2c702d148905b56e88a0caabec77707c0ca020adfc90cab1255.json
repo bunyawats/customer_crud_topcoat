@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT (\n            SELECT COUNT(*) FROM products p\n            WHERE (p.name, p.id) < (t.name, t.id)\n        ) AS \"position!\"\n        FROM products t\n        WHERE t.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "position!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "81e07d591a50c2c702d148905b56e88a0caabec77707c0ca020adfc90cab1255"
+}

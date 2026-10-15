@@ -8,10 +8,56 @@ pub async fn list(pool: &PgPool) -> Result<Vec<Product>, sqlx::Error> {
         r#"
         SELECT id, name, sku, price_cents, description, created_at, updated_at
         FROM products
-        ORDER BY name
+        ORDER BY name, id
         "#
     )
     .fetch_all(pool)
+    .await
+}
+
+pub async fn count(pool: &PgPool) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar!(r#"SELECT COUNT(*) AS "count!" FROM products"#)
+        .fetch_one(pool)
+        .await
+}
+
+/// One page of [`list`]'s order. The `id` tiebreaker keeps `OFFSET` paging
+/// stable when names tie.
+pub async fn list_page(
+    pool: &PgPool,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<Product>, sqlx::Error> {
+    sqlx::query_as!(
+        Product,
+        r#"
+        SELECT id, name, sku, price_cents, description, created_at, updated_at
+        FROM products
+        ORDER BY name, id
+        LIMIT $1 OFFSET $2
+        "#,
+        limit,
+        offset
+    )
+    .fetch_all(pool)
+    .await
+}
+
+/// 0-based position of product `id` in list order, or `None` if it doesn't
+/// exist.
+pub async fn position_of(pool: &PgPool, id: i64) -> Result<Option<i64>, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"
+        SELECT (
+            SELECT COUNT(*) FROM products p
+            WHERE (p.name, p.id) < (t.name, t.id)
+        ) AS "position!"
+        FROM products t
+        WHERE t.id = $1
+        "#,
+        id
+    )
+    .fetch_optional(pool)
     .await
 }
 

@@ -8,10 +8,56 @@ pub async fn list(pool: &PgPool) -> Result<Vec<Customer>, sqlx::Error> {
         r#"
         SELECT id, first_name, last_name, email, phone, created_at, updated_at
         FROM customers
-        ORDER BY last_name, first_name
+        ORDER BY last_name, first_name, id
         "#
     )
     .fetch_all(pool)
+    .await
+}
+
+pub async fn count(pool: &PgPool) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar!(r#"SELECT COUNT(*) AS "count!" FROM customers"#)
+        .fetch_one(pool)
+        .await
+}
+
+/// One page of [`list`]'s order. The `id` tiebreaker keeps `OFFSET` paging
+/// stable when names tie.
+pub async fn list_page(
+    pool: &PgPool,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<Customer>, sqlx::Error> {
+    sqlx::query_as!(
+        Customer,
+        r#"
+        SELECT id, first_name, last_name, email, phone, created_at, updated_at
+        FROM customers
+        ORDER BY last_name, first_name, id
+        LIMIT $1 OFFSET $2
+        "#,
+        limit,
+        offset
+    )
+    .fetch_all(pool)
+    .await
+}
+
+/// 0-based position of customer `id` in list order, or `None` if it doesn't
+/// exist. Row comparison matches the `ORDER BY` above column for column.
+pub async fn position_of(pool: &PgPool, id: i64) -> Result<Option<i64>, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"
+        SELECT (
+            SELECT COUNT(*) FROM customers c
+            WHERE (c.last_name, c.first_name, c.id) < (t.last_name, t.first_name, t.id)
+        ) AS "position!"
+        FROM customers t
+        WHERE t.id = $1
+        "#,
+        id
+    )
+    .fetch_optional(pool)
     .await
 }
 

@@ -27,6 +27,17 @@ INSERT INTO products (name, sku, price_cents, description) VALUES
     ('Noise-Cancelling Headphones', 'HP-006', 24900, NULL)
 ON CONFLICT (sku) DO NOTHING;
 
+-- Bulk sample rows, so every list has more than one page (10 per page).
+INSERT INTO customers (first_name, last_name, email, phone)
+SELECT 'Sample', 'Customer ' || lpad(n::text, 2, '0'), 'sample' || lpad(n::text, 2, '0') || '@example.com', NULL
+FROM generate_series(1, 24) AS n
+ON CONFLICT (email) DO NOTHING;
+
+INSERT INTO products (name, sku, price_cents, description)
+SELECT 'Sample Product ' || lpad(n::text, 2, '0'), 'SMP-' || lpad(n::text, 2, '0'), 500 + n * 100, NULL
+FROM generate_series(1, 12) AS n
+ON CONFLICT (sku) DO NOTHING;
+
 -- Orders: (customer email, status, [(sku, quantity)]). Line items snapshot the
 -- product's current price, as the app does.
 DO $$

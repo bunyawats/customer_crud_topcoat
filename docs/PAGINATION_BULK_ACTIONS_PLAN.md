@@ -1,6 +1,6 @@
 # Pagination + multi-select + bulk delete: implementation plan
 
-Status: **planned, not started** (2026-10-15). This file is the single source of truth for this
+Status: **done** (2026-10-15). Follow-ups are listed at the end. This file is the single source of truth for this
 feature's progress. Tick boxes as tasks land; add a line to the Session log at the end of every
 session.
 
@@ -42,9 +42,10 @@ FastAPI + HTMX + Redis build of the same feature.
   derefs to `[u8; 32]`). Storage is ours. Needs features `session` + `cookie` and
   `.cookies().sessions(SessionConfig::default())` on the router builder.
 - The session cookie is **always** `__Host-session`, `Secure`, `HttpOnly`, `SameSite=Lax`
-  (`topcoat-session-0.10.0/src/token/store.rs`). Chrome accepts Secure cookies on
-  `http://127.0.0.1`/`localhost`, but **confirm in the browser in task 0.2**. Fallback: implement
-  the public `TokenStore` trait with a non-Secure cookie for dev.
+  (`topcoat-session-0.10.0/src/token/store.rs`). **Confirmed in Chrome (task 0.2):** it is stored
+  on `http://127.0.0.1:3010` and sent back, so no custom `TokenStore` is needed. (Safari may differ;
+  untested.) The `cookie` + `session` features and `.cookies().sessions(SessionConfig::default())`
+  are already in `Cargo.toml` / `src/app.rs` since task 0.2.
 - Cookie writes must happen before the response body streams: call `session::start` in the handler
   before building the view.
 - htmx bundle at `unpkg.com/htmx.org@next` is byte-identical to `4.0.0` (checked 2026-10-15).
@@ -52,9 +53,11 @@ FastAPI + HTMX + Redis build of the same feature.
   (htmx4 skill), so send ids as `"1,2,3"` explicitly.
 - `hx-include="#x"` on a non-form element includes every `[name]` descendant (bundle `#Ze`). Used to
   send the current `page`/`query_id` from hidden inputs, so rows don't need page info baked in.
-- htmx v4 strips `<tr>`/`<td>` from bare row responses (htmx4 skill §1). New swaps target `<div>`
-  regions only. The existing edit-row swap (`PUT` → bare `<tr>`, outerHTML) may already be affected:
-  check in task 0.1.
+- **Bare `<tr>` swaps work here (task 0.1).** The htmx4 skill §1 says v4 strips `<tr>`/`<td>` from
+  bare row responses, but the existing edit flow (`PUT` → bare `<tr>`, outerHTML on
+  `#customer-row-N`) re-renders intact in Chrome with htmx 4.0.0 (5 `<td>`s, no stray nodes, new
+  `updated_at` in the title). The new list swaps still target `<div>` regions, which is simpler
+  anyway. The global skill's claim may need narrowing; ask the user before editing it.
 
 ## Design
 
@@ -81,6 +84,54 @@ FastAPI + HTMX + Redis build of the same feature.
 - Unique/constraint names: none new that need `unique_violation_message` arms.
 
 ### Web (`src/app/`)
+
+**As built in Phase 1** (read this before Phase 2):
+- `src/app.rs`: `PageForm` (Prev/Next form fields → `PageRequest`), `ListQuery` +
+  `page_after_write(cx)` (reads `page` from the **query string**: htmx v4 sends `GET`/`DELETE`
+  params in the URL, verified in the bundle), always with a fresh count.
+- `src/ui.rs`: `PagerInfo` (copied out of `Page<T>` so the rows can be moved into the row
+  components), `list_state` (hidden inputs at `#<list_id>-state`), `pager` (tfoot), and
+  `row_actions` now takes `list_id`: delete targets `#<list_id>` outerHTML with
+  `hx-include="#<list_id>-state"`.
+- Each resource: `LIST_ID` / `LIST_TARGET` consts, a `<resource>_list(listing: Page<Row>)`
+  component (the `<div id=LIST_ID>` region), `<resource>/page.rs` (`POST`, `show_page`), create →
+  `page_of` the new row, delete → `page_after_write`. `to_rows` helpers and `order::services::list`
+  are gone; customer/product `list()` stay (order form dropdowns use them).
+- Boolean attributes render as `disabled=""`; test for that exact string (class lists contain
+  `disabled:` variants). `hx-vals` JSON comes out HTML-escaped (`&quot;`), which is fine.
+**As built in Phase 2:**
+- `migrations/20261015000000_create_selected_items.sql`; `src/selection/` (`Resource` enum,
+  `get`/`update`/`clear`/`forget_item`, `parse_ids`, purge of rows older than 1 day on write).
+- `src/app.rs`: `session_key` (read-only), `ensure_session_key` (starts a session; only the
+  selection route calls it), `selected_ids(cx, resource) -> HashSet<i64>`, `SelectionForm`
+  (explicit `page`/`query_id` fields: no `#[serde(flatten)]`, which breaks numbers with
+  urlencoded), `apply_selection`, `clear_selection` (called by each list `#[page]`).
+- `src/ui.rs`: `table_head` takes a `child` for the leading select-all cell; `row_checkbox`,
+  `select_all_checkbox`, `bulk_toolbar(toolbar_id, count, oob)`. Ticked rows are tinted with
+  Tailwind's `has-checked:` variant, so the tint follows the box with no re-render.
+- Each resource: `RESOURCE` / `TOOLBAR_ID` consts, `<res>/selection.rs` (`update_selection`),
+  `<res>_list`/`<res>_rows` take `selected: &HashSet<i64>`, `<res>_row` takes `selected: bool`;
+  show/edit row look it up; delete calls `forget_item` and sends the toolbar OOB.
+- Test harness `App` now has a cookie jar (`has_session()`); two `App`s = two browsers.
+**As built in Phase 3:**
+- `src/bulk.rs`: `MAX_BATCH` (100), `prepare_batch` (de-dupe, empty, cap), `fan_out` (sequential;
+  `Validation`/`NotFound` → failed item, `Database` aborts), `BulkResult`. Each resource service has
+  `bulk_delete(pool, ids)` = `fan_out` over its own `delete`. **Gotcha:** `fan_out` takes
+  `F: Fn(i64) -> Fut`, not `impl AsyncFn`: an async closure's per-call future borrows the closure
+  for a higher-ranked lifetime and the handler fails Topcoat's `Send` bound ("implementation of
+  `Send` is not general enough"). `AsyncFnOnce` in `pagination::fetch_page` is fine.
+- `src/ui.rs`: `bulk_toolbar` gained "Delete selected" (posts to the confirm route with
+  `hx-include` of the list state, into `#dialog-content`); `BulkItem`, `BulkFailure`,
+  `bulk_confirm_dialog` (form carries only `page`), `bulk_result_dialog`.
+- Each resource: `<res>_toolbar` wrapper, `bulk_items(cx, ids)` (fresh labels, stale ids dropped),
+  `<res>_list` has `#[default] oob`, `<res>/bulk_delete.rs` (`execute_bulk_delete`) and
+  `<res>/bulk_delete/confirm.rs` (`confirm_bulk_delete`). Execute clears the selection, forgets
+  deleted ids from every session, and returns result dialog + list OOB + toolbar OOB. Empty/over-cap
+  execute → 422 through the error layer (alert, `HX-Reswap: none`).
+- `seeds/dev.sql` now adds 24 sample customers + 12 sample products (`generate_series`, idempotent).
+- Cosmetic, not fixed: column widths shift between pages (auto table layout). Consider
+  `table-fixed` + column widths in Phase 4.
+
 
 Shared, in `src/ui.rs` or a new `src/app/list.rs`:
 - `session_hash(cx) -> Option<TokenHash>` (read only) and `ensure_session(cx) -> TokenHash`
@@ -128,47 +179,86 @@ Same table for `/products` and `/orders`. Delete guards already produce
 ## Tasks
 
 ### Phase 0: de-risk (do first, small)
-- [ ] **0.1** In the browser (`PORT=3010 topcoat dev`), edit a customer and check whether the row
+- [x] **0.1** In the browser (`PORT=3010 topcoat dev`), edit a customer and check whether the row
   re-renders correctly or its cells collapse (htmx v4 bare-`<tr>` stripping). If broken, fix it the
   htmx4-skill way (wrap row responses in `<table><tbody>…</tbody></table>`, add `hx-select="tr"` on
   the edit form) with a test asserting the wrapper. Record the result in the Session log.
-- [ ] **0.2** Spike: enable `session` + `cookie` features and `.cookies().sessions(..)`, add a
+- [x] **0.2** Spike: enable `session` + `cookie` features and `.cookies().sessions(..)`, add a
   throwaway route that calls `session::start`, and confirm in Chrome that `__Host-session` is
   stored on `http://127.0.0.1:3010` and sent back. If not, implement a dev `TokenStore`. Remove the
   throwaway route.
 
 ### Phase 1: pagination (no selection yet)
-- [ ] **1.1** `src/pagination.rs`: `Page`, `PageRequest`, count cache, clamping + unit tests.
-- [ ] **1.2** Repos/services: `count`, `list_page`, `position_of`/`page_of`, id tiebreakers for all
+- [x] **1.1** `src/pagination.rs`: `Page`, `PageRequest`, count cache, clamping + unit tests.
+- [x] **1.2** Repos/services: `count`, `list_page`, `position_of`/`page_of`, id tiebreakers for all
   three resources. `cargo sqlx prepare`; commit `.sqlx/`.
-- [ ] **1.3** UI: `#<res>-list` region, `pager`, `list_state`; `POST /<res>/page` for all three.
+- [x] **1.3** UI: `#<res>-list` region, `pager`, `list_state`; `POST /<res>/page` for all three.
   Rewire create (page holding the new row) and single delete (re-render current page).
-- [ ] **1.4** Integration tests for paging, clamping, create landing page, delete re-render.
+- [x] **1.4** Integration tests for paging, clamping, create landing page, delete re-render.
   Browser check of Prev/Next on 25+ seeded customers (extend `seeds/dev.sql` or seed via a test
   script, but keep `seeds/dev.sql` idempotent).
 
 ### Phase 2: selection
-- [ ] **2.1** Migration for `selected_items`; `src/selection/` module + repo tests (`#[sqlx::test]`).
-- [ ] **2.2** Session helpers; harness cookie jar.
-- [ ] **2.3** Row checkboxes, select-all, `#<res>-toolbar`; `POST /<res>/selection`; page GET clears
+- [x] **2.1** Migration for `selected_items`; `src/selection/` module + repo tests (`#[sqlx::test]`).
+- [x] **2.2** Session helpers; harness cookie jar.
+- [x] **2.3** Row checkboxes, select-all, `#<res>-toolbar`; `POST /<res>/selection`; page GET clears
   selection; edit row keeps state.
-- [ ] **2.4** Integration tests: survive paging, select-all, count, session isolation, GET clears.
+- [x] **2.4** Integration tests: survive paging, select-all, count, session isolation, GET clears.
 
 ### Phase 3: bulk delete
-- [ ] **3.1** `bulk_delete` service per resource (de-dupe, cap, fan-out, per-item results) + unit
+- [x] **3.1** `bulk_delete` service per resource (de-dupe, cap, fan-out, per-item results) + unit
   tests.
-- [ ] **3.2** Confirm dialog route + component; execute route + result dialog; clear selection;
+- [x] **3.2** Confirm dialog route + component; execute route + result dialog; clear selection;
   OOB list + toolbar refresh.
-- [ ] **3.3** Integration tests incl. guarded customer/product reported as failed, stale ids dropped.
+- [x] **3.3** Integration tests incl. guarded customer/product reported as failed, stale ids dropped.
 
 ### Phase 4: finish
-- [ ] **4.1** Browser walkthrough on all three lists (select across pages, bulk delete with a
+- [x] **4.1** Browser walkthrough on all three lists (select across pages, bulk delete with a
   partial failure), screenshots.
-- [ ] **4.2** Docs: CLAUDE.md (new routes, `selection/` module, `pagination.rs`, session features),
+- [x] **4.2** Docs: CLAUDE.md (new routes, `selection/` module, `pagination.rs`, session features),
   project skill `topcoat-htmx-crud-stack` if a new gotcha came up, README feature list.
-- [ ] **4.3** `cargo fmt`, `topcoat fmt`, clippy, full `cargo test`; commit.
+- [x] **4.3** `cargo fmt`, `topcoat fmt`, clippy, full `cargo test`; commit.
 
 ## Session log
 
 - 2026-10-15: plan written. Decisions taken with the user; reference read; Topcoat session/cookie
   and htmx 4.0.0 `hx-vals`/`hx-include` behaviour verified (see "Facts verified"). No code yet.
+- 2026-10-15 (session 2): Phase 0 done. 0.1: edit-row swap works, no fix needed (see "Facts
+  verified"). 0.2: Chrome stores/resends `__Host-session` on http://127.0.0.1:3010; probe route
+  removed, session/cookie features kept. 51 tests pass, clippy clean. Noticed: Edsger Dijkstra was
+  deleted from the dev DB by the user (not by Claude).
+- 2026-10-15 (session 2, cont.): Phase 1 done. `src/pagination.rs` (count cache, clamping, 10 unit
+  tests); `count`/`list_page`/`position_of` + `id` tiebreakers in all three repos (`.sqlx/`
+  regenerated); list regions, pager, `/<res>/page` routes; create lands on the new row's page;
+  delete re-renders the current page. `tests/pagination_routes.rs` (8 tests). Changed one existing
+  test on purpose: `update_then_delete_removes_customer` expected an empty DELETE body, now expects
+  the re-rendered list. Hit the component-name gotcha once (`let list_state` vs the `list_state`
+  component). Browser: Prev/Next across 3 pages of 30 customers works. 69 tests pass, clippy clean.
+  Re-running the seed re-created Edsger Dijkstra (the user had deleted him).
+- 2026-10-15 (session 2, cont.): Phase 2 done. Selection table + module (7 tests), session
+  helpers, harness cookie jar, checkboxes/select-all/toolbar on all three lists,
+  `tests/selection_routes.rs` (9 tests). Browser: ticking rows, select-all, and the count surviving
+  Prev/Next all work in Chrome. 85 tests pass, clippy clean.
+- 2026-10-15 (session 2, cont.): Phase 3 done. `src/bulk.rs` (4 tests), `bulk_delete` services,
+  confirm/result dialogs, toolbar button, routes for all three lists, `tests/bulk_delete_routes.rs`
+  (9 tests: fresh names, stale ids, guarded customer/product reported, cap, per-browser isolation).
+  98 tests pass, clippy clean.
+- 2026-10-15 (session 2, cont.): Phase 4 done except the commit. Browser walkthrough: ticked one
+  customer on each of pages 1-3 (incl. Ada Lovelace, who has orders), "Delete selected" listed all
+  three, result: 2 deleted, Ada reported with the guard message, list refreshed on page 3, toolbar
+  reset. Products/orders lists render toolbar + pager. One hiccup: a stray click on the earlier,
+  coordinate-based attempt opened a native `hx-confirm` dialog and the tab went to the background
+  (screenshots then time out); redone with element refs. Docs: CLAUDE.md "Lists" section + layout,
+  README features, project skill section (both copies). 98 tests, clippy, sqlx offline check green.
+  `cargo fmt --check` flagged only `src/customer/models.rs` line 1 (whitespace added in the user's
+  IDE); on the user's say-so it was restored to its committed form, then everything committed.
+
+## Follow-ups (not planned work)
+
+- Column widths shift between pages (auto table layout): `table-fixed` + widths.
+- The global `htmx4` skill's §1 (bare `<tr>` swaps get stripped) didn't reproduce here; worth
+  narrowing, with the user's OK.
+- The global `topcoat` skill could gain the `AsyncFn`/`Send`, `DELETE`-params-in-query and
+  `topcoat::session` cookie notes above, with the user's OK.
+- CLAUDE.md says repositories never return `sqlx::Error`, but every repository (old and new) does,
+  and services convert. Either reword the rule or change the code.

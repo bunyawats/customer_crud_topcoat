@@ -85,9 +85,12 @@ async fn update_then_delete_removes_customer(pool: PgPool) {
     assert_eq!(response.status, StatusCode::OK);
     assert!(response.body.contains("Ada King"));
 
+    // Delete re-renders the list region (so the pager's counts stay right),
+    // without the deleted row.
     let response = app.htmx_delete(&format!("/customers/{id}")).await;
     assert_eq!(response.status, StatusCode::OK);
-    assert!(response.body.is_empty());
+    assert!(response.body.contains("id=\"customer-list\""));
+    assert!(!response.body.contains(&format!("customer-row-{id}\"")));
 
     let response = app.htmx_get(&format!("/customers/{id}")).await;
     assert_eq!(response.status, StatusCode::NOT_FOUND);

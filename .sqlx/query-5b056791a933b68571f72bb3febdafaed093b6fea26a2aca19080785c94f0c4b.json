@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM selected_items WHERE session_hash = $1 AND resource = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5b056791a933b68571f72bb3febdafaed093b6fea26a2aca19080785c94f0c4b"
+}

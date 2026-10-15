@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT item_id FROM selected_items\n        WHERE session_hash = $1 AND resource = $2\n        ORDER BY selected_at, item_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "item_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "selected_items",
+            "name": "item_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d117dbd244271dded5301f437d62c684cd2e8b1f5119bf1dbc7c5432bce8a564"
+}

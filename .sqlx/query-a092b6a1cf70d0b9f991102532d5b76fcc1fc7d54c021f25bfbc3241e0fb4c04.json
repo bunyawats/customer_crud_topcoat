@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, first_name, last_name, email, phone, created_at, updated_at\n        FROM customers\n        ORDER BY last_name, first_name\n        ",
+  "query": "\n        SELECT id, first_name, last_name, email, phone, created_at, updated_at\n        FROM customers\n        ORDER BY last_name, first_name, id\n        ",
   "describe": {
     "columns": [
       {
@@ -94,5 +94,5 @@
       false
     ]
   },
-  "hash": "4be9a3e2339725d5e06ec8f8df74c94ef961602b09aea49612e5ee2d47b1a0c8"
+  "hash": "a092b6a1cf70d0b9f991102532d5b76fcc1fc7d54c021f25bfbc3241e0fb4c04"
 }

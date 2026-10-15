@@ -13,11 +13,25 @@ design, testing, UI patterns, and the Topcoat gotchas behind them). The user-glo
 `tailwindcss4` and `rust-best-practices` in `~/.claude/skills/` still apply. This file only states
 what's specific to *this* project.
 
-## Work in progress
-Pagination + multi-select + bulk delete for all three lists is planned, not built:
-**[`docs/PAGINATION_BULK_ACTIONS_PLAN.md`](docs/PAGINATION_BULK_ACTIONS_PLAN.md)** holds the
-decisions, design, checkbox-tracked tasks and session log. Read it before touching list pages, and
-resume from its first unticked task.
+## Lists: pagination, selection, bulk delete
+All three lists page 10 rows at a time, keep a server-side multi-select, and bulk delete. The
+decisions, as-built notes and gotchas live in
+**[`docs/PAGINATION_BULK_ACTIONS_PLAN.md`](docs/PAGINATION_BULK_ACTIONS_PLAN.md)**; read its
+"As built" notes before changing a list page. The essentials:
+- **Regions per list page:** `#<res>-toolbar` (selected count, "Delete selected") and `#<res>-list`
+  (hidden `#<res>-list-state` inputs `page`/`query_id`, the table, the pager). Every list-changing
+  response replaces `#<res>-list` whole and sends the toolbar out-of-band.
+- **Counts:** `src/pagination.rs` caches `COUNT(*)` for 30 s under a `query_id` that Prev/Next echo
+  back. Writes (create, delete) re-render without a `query_id`, forcing a fresh count. List queries
+  need an `id` tiebreaker in `ORDER BY` so `OFFSET` paging is stable.
+- **Selection:** stored in `selected_items` (`src/selection/`), keyed by the anonymous Topcoat
+  session's token hash (`app::session_key` / `ensure_session_key`; only the selection route starts
+  a session). A list `#[page]` visit clears it; Prev/Next never do. Bulk routes re-read it
+  server-side and never trust ids from the client.
+- **Bulk delete:** `src/bulk.rs` fans out over the resource's own `services::delete`, so its guards
+  report per item; at most `bulk::MAX_BATCH` (100) ids.
+- htmx v4 sends `DELETE` parameters in the **query string**: read them with `#[query_params]`
+  (`app::page_after_write`), not `Form<T>`.
 
 ## Technology Stack
 - **Framework:** Topcoat 0.10 (module routing, `view!` components, layouts/layers, assets). Needs Rust 1.98+.
@@ -96,6 +110,11 @@ src/
   app/<resources>/new.rs         # GET .../new          (create form fragment)
   app/<resources>/<x>_id.rs      # GET/PUT/DELETE .../{id} (row fragment, update, delete)
   app/<resources>/<x>_id/edit.rs # GET .../{id}/edit    (edit form fragment)
+  app/<resources>/page.rs        # POST .../page        (Prev/Next: list region)
+  app/<resources>/selection.rs   # POST .../selection   (checkbox / select-all)
+  app/<resources>/bulk_delete.rs # POST .../bulk-delete (+ bulk_delete/confirm.rs: the confirm dialog)
+  pagination.rs  bulk.rs         # shared domain helpers: Page/count cache; batch prep + fan-out
+  selection/                     # domain: server-side selection store (no HTTP types)
 ```
 
 1. **Web tree (`src/app/`)** - extraction (`Form<T>`, `path_param`), handlers, view models
@@ -108,9 +127,10 @@ src/
 `#[page]` handlers are wrapped by the root layout (`ui::shell`); `#[route]` handlers return bare
 fragments for htmx. Keep that split: a fragment endpoint must not be a `#[page]`.
 
-Component naming: `<resource>_row`, `<resource>_rows`, `<resource>_form`. Topcoat turns component
-and handler names into unit structs, so a component named `form` or a page named `index` breaks local
-bindings with those names.
+Component naming: `<resource>_row`, `<resource>_rows`, `<resource>_form`, `<resource>_list`,
+`<resource>_toolbar`. Topcoat turns component and handler names into unit structs, so a component
+named `form` or a page named `index` breaks local bindings with those names (hit again here: a local
+`let list_state` next to the `ui::list_state` component).
 
 ---
 

@@ -11,10 +11,13 @@
 //!   markup lives in `ui`.
 
 pub mod app;
+pub mod bulk;
 pub mod customer;
 pub mod error;
 pub mod order;
+pub mod pagination;
 pub mod product;
+pub mod selection;
 pub mod ui;
 
 pub use app::router;

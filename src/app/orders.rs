@@ -3,8 +3,13 @@
 //! Also home to the order `view!` components (row, rows, form, line-item
 //! row), which the child modules reuse for their fragment responses.
 
+pub(crate) mod bulk_delete;
 pub(crate) mod new;
 pub(crate) mod order_id;
+pub(crate) mod page;
+pub(crate) mod selection;
+
+use std::collections::HashSet;
 
 use sqlx::PgPool;
 use topcoat::{
@@ -14,7 +19,7 @@ use topcoat::{
     view::{View, ViewExt, ViewHandle, class, component, view},
 };
 
-use super::pool;
+use super::{clear_selection, pool, selected_ids};
 use crate::{
     customer::services as customer_service,
     error::AppError,
@@ -22,10 +27,20 @@ use crate::{
         models::{LineItemInput, OrderDetail, OrderForm, OrderSummary, STATUSES},
         services as service,
     },
+    pagination::{Page, PageRequest},
     product::services as product_service,
-    ui::{self, SELECT},
+    selection::models::Resource,
+    ui::{self, PagerInfo, SELECT},
 };
 use order_id::OrderId;
+
+/// Id of the list region; `#<LIST_ID>-state` holds its hidden page inputs.
+pub(crate) const LIST_ID: &str = "order-list";
+/// Which stored selection this list's checkboxes read and write.
+pub(crate) const RESOURCE: Resource = Resource::Orders;
+/// Id of the selection toolbar above the list (sent out-of-band on changes).
+pub(crate) const TOOLBAR_ID: &str = "order-toolbar";
+const LIST_TARGET: &str = "#order-list";
 
 /// Flat, owned view model for a single order row.
 pub(crate) struct OrderRow {
@@ -48,10 +63,6 @@ impl From<OrderSummary> for OrderRow {
     }
 }
 
-fn to_rows(orders: Vec<OrderSummary>) -> Vec<OrderRow> {
-    orders.into_iter().map(OrderRow::from).collect()
-}
-
 fn capitalize(s: &str) -> String {
     let mut chars = s.chars();
     match chars.next() {
@@ -63,41 +74,129 @@ fn capitalize(s: &str) -> String {
 /// `GET /orders`
 #[page]
 pub(crate) async fn index(cx: &Cx) -> Result<impl View> {
-    let orders = to_rows(service::list(pool(cx)).await?);
+    clear_selection(cx, RESOURCE).await?;
+    let selected = HashSet::new();
+    let listing = service::list_page(pool(cx), PageRequest::first())
+        .await?
+        .map(OrderRow::from);
     let new_url = href!(new::new_form).resolve(cx);
 
     Ok(view! {
         ui::page_header(title: "Orders", add_label: "Add order", new_url: &new_url)
-        ui::table_card(
-            ui::table_head(
-                columns: &["Order", "Customer", "Status", "Total", "Placed", ""]
+        order_toolbar(count: 0)
+        order_list(listing: listing, selected: &selected)
+    })
+}
+
+/// `POST /orders` - creates the order, then re-renders the list on the
+/// page that holds it (so the new row is visible in its sorted position).
+#[route(POST)]
+pub(crate) async fn create(cx: &Cx, Form(form): Form<OrderForm>) -> Result<ViewHandle> {
+    let id = service::create(pool(cx), form).await?;
+    let page = service::page_of(pool(cx), id).await?;
+    let listing = service::list_page(pool(cx), PageRequest::new(page, ""))
+        .await?
+        .map(OrderRow::from);
+    let selected = selected_ids(cx, RESOURCE).await?;
+    view! { cx => order_list(listing: listing, selected: &selected) }
+        .single()
+        .await
+}
+
+/// The `#order-list` region: hidden list state, the table and its pager.
+/// Prev/Next, create and delete all replace it whole (`outerHTML`).
+#[component]
+pub(crate) async fn order_list(
+    cx: &Cx,
+    listing: Page<OrderRow>,
+    selected: &HashSet<i64>,
+    #[default] oob: bool,
+) -> Result<impl View> {
+    let page_url = href!(page::show_page).resolve(cx);
+    let select_url = href!(selection::update_selection).resolve(cx);
+    let page_ids: Vec<i64> = listing.items.iter().map(|row| row.id).collect();
+    let all_selected = !page_ids.is_empty() && page_ids.iter().all(|id| selected.contains(id));
+    let pager = PagerInfo::from(&listing);
+    let orders = listing.items;
+    Ok(view! {
+        <div id=(LIST_ID) hx-swap-oob=(oob.then_some("true"))>
+            ui::list_state(
+                list_id: LIST_ID,
+                page: pager.page,
+                query_id: &pager.query_id
             )
-            <tbody id="rows-body">order_rows(orders: orders)</tbody>
+            ui::table_card(
+                ui::table_head(
+                    columns: &["Order", "Customer", "Status", "Total", "Placed", ""],
+                    ui::select_all_checkbox(
+                        ids: &page_ids,
+                        checked: all_selected,
+                        select_url: &select_url,
+                        list_id: LIST_ID
+                    )
+                )
+                <tbody id="rows-body">
+                    order_rows(orders: orders, selected: selected)
+                </tbody>
+                ui::pager(colspan: 7, url: &page_url, list_id: LIST_ID, info: &pager)
+            )
+        </div>
+    })
+}
+
+/// This list's selection toolbar (see [`ui::bulk_toolbar`]).
+#[component]
+pub(crate) async fn order_toolbar(
+    cx: &Cx,
+    count: usize,
+    #[default] oob: bool,
+) -> Result<impl View> {
+    let confirm_url = href!(bulk_delete::confirm::confirm_bulk_delete).resolve(cx);
+    Ok(view! {
+        ui::bulk_toolbar(
+            toolbar_id: TOOLBAR_ID,
+            count: count,
+            confirm_url: &confirm_url,
+            list_id: LIST_ID,
+            oob: oob
         )
     })
 }
 
-/// `POST /orders` - creates the order, then re-renders every row.
-#[route(POST)]
-pub(crate) async fn create(cx: &Cx, Form(form): Form<OrderForm>) -> Result<ViewHandle> {
-    service::create(pool(cx), form).await?;
-    let orders = to_rows(service::list(pool(cx)).await?);
-    view! { cx => order_rows(orders: orders) }.single().await
+/// Fresh display fields for the selected ids, for the bulk dialogs. Ids
+/// that no longer exist (deleted elsewhere) are dropped.
+pub(crate) async fn bulk_items(cx: &Cx, ids: &[i64]) -> Result<Vec<ui::BulkItem>> {
+    let mut items = Vec::with_capacity(ids.len());
+    for &id in ids {
+        match service::get(pool(cx), id).await {
+            Ok(detail) => items.push(ui::BulkItem {
+                id,
+                label: format!("Order #{id}"),
+                detail: OrderRow::from(detail.order).customer_name,
+            }),
+            Err(AppError::NotFound(_)) => {}
+            Err(err) => return Err(err.into()),
+        }
+    }
+    Ok(items)
 }
 
 #[component]
-pub(crate) async fn order_rows(orders: Vec<OrderRow>) -> Result<impl View> {
+pub(crate) async fn order_rows(
+    orders: Vec<OrderRow>,
+    selected: &HashSet<i64>,
+) -> Result<impl View> {
     Ok(view! {
         if orders.is_empty() {
             ui::empty_rows(
-                colspan: 6,
+                colspan: 7,
                 title: "The ledger is empty.",
                 hint: "Add your first order to get started."
             )
         } else {
             #[key(order.id)]
             for order in orders {
-                order_row(order: &order)
+                order_row(order: &order, selected: selected.contains(&order.id))
             }
         }
     })
@@ -105,7 +204,8 @@ pub(crate) async fn order_rows(orders: Vec<OrderRow>) -> Result<impl View> {
 
 /// One read-only table row, `order-row-<id>`.
 #[component]
-pub(crate) async fn order_row(cx: &Cx, order: &OrderRow) -> Result<impl View> {
+pub(crate) async fn order_row(cx: &Cx, order: &OrderRow, selected: bool) -> Result<impl View> {
+    let select_url = href!(selection::update_selection).resolve(cx);
     let row_id = format!("order-row-{}", order.id);
     let edit_url = href!(order_id::edit::edit_form, OrderId(order.id)).resolve(cx);
     let delete_url = href!(order_id::delete, OrderId(order.id)).resolve(cx);
@@ -119,11 +219,16 @@ pub(crate) async fn order_row(cx: &Cx, order: &OrderRow) -> Result<impl View> {
     Ok(view! {
         <tr
             id=(&row_id)
-            class="group border-b border-line text-ink last:border-0 transition-colors hover:bg-paper"
+            class="group border-b border-line text-ink last:border-0 transition-colors hover:bg-paper has-checked:bg-brand-tint/40"
         >
-            <td
-                class="border-l-2 border-l-transparent py-3 pr-4 pl-[14px] font-mono text-xs text-muted transition-colors group-hover:border-l-brand"
-            >
+            ui::row_checkbox(
+                id: order.id,
+                label: &label,
+                checked: selected,
+                select_url: &select_url,
+                list_id: LIST_ID
+            )
+            <td class="px-4 py-3 font-mono text-xs text-muted">
                 "#"
                 (order.id)
             </td>
@@ -146,7 +251,7 @@ pub(crate) async fn order_row(cx: &Cx, order: &OrderRow) -> Result<impl View> {
             </td>
             ui::row_actions(
                 label: &label,
-                row_id: &row_id,
+                list_id: LIST_ID,
                 edit_url: &edit_url,
                 delete_url: &delete_url,
                 confirm: "Delete this order?"
@@ -254,8 +359,8 @@ pub(crate) async fn order_form(cx: &Cx, data: &OrderFormData) -> Result<impl Vie
             match data.order_id {
                 None => {
                     hx-post=(&target)
-                    hx-target="#rows-body"
-                    hx-swap="innerHTML"
+                    hx-target=(LIST_TARGET)
+                    hx-swap="outerHTML"
                 }
                 Some(id) => {
                     hx-put=(&target)

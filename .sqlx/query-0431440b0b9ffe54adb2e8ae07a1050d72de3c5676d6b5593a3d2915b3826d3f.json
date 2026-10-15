@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM selected_items WHERE selected_at < now() - make_interval(secs => $1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0431440b0b9ffe54adb2e8ae07a1050d72de3c5676d6b5593a3d2915b3826d3f"
+}

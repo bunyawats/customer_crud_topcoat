@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM selected_items WHERE resource = $1 AND item_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "458999b8601a7117e251b7a35177b1be057050fbdf9c46ec6ba8e98d557e395f"
+}

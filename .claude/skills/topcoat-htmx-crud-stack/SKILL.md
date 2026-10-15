@@ -171,6 +171,34 @@ response carries its 4xx.
 - The nav highlight and page `<title>` come from the request path (`ui::Section::from_path`), so pages
   don't thread a `current_page` value around.
 
+## Paged lists with server-side selection and bulk delete
+
+Ported from `loan-onboarding-poc` (FastAPI + Redis) per the global `list-pagination-bulk-actions`
+skill, with Postgres + `topcoat::session` in place of Redis. Full design and as-built notes:
+`docs/PAGINATION_BULK_ACTIONS_PLAN.md`. The shape, per resource:
+- `<res>_list(listing: Page<Row>, selected, #[default] oob)` renders the `<div id="<res>-list">`
+  region (hidden `page`/`query_id` inputs at `#<res>-list-state`, the table, the pager). Rows and the
+  toolbar `hx-include` that state, so rows never need to know their page.
+- `POST /<res>/page`, `/selection`, `/bulk-delete/confirm`, `/bulk-delete`. Responses that change
+  the selection send `<res>_toolbar(oob: true)`.
+- Domain helpers with no Topcoat types: `pagination::fetch_page` (count cache), `selection::*`
+  (keyed by the session token hash bytes), `bulk::{prepare_batch, fan_out}`.
+
+Gotchas hit while building it (each cost a compile or test cycle):
+- **`impl AsyncFn` in a helper called from a handler** fails Topcoat's `Send` bound ("implementation
+  of `Send` is not general enough"): the per-call future borrows the closure for a higher-ranked
+  lifetime. Take `F: Fn(i64) -> Fut, Fut: Future<..>` instead. `AsyncFnOnce` is fine.
+- **htmx v4 puts `GET`/`DELETE` params in the query string** (bundle-verified), so a `DELETE` that
+  `hx-include`s state reads it with `#[query_params]`, not `Form<T>`.
+- **`hx-include="#div"`** sends every `[name]` input inside a non-form element (bundle-verified).
+- `topcoat::session`'s cookie is always `__Host-session; Secure`; Chrome stores it on
+  `http://127.0.0.1` fine. Calling `session::start` sets a cookie, so do it before building the view.
+- A boolean attribute renders as `disabled=""`; tests must match that exact string, since Tailwind
+  class lists contain `disabled:` variants.
+- `#[serde(flatten)]` with urlencoded forms breaks numeric fields; spell the fields out.
+- Bare `<tr>` outerHTML swaps (the edit-row flow) work in Chrome with htmx 4.0.0, despite the
+  `htmx4` skill's §1 warning; new list swaps still target `<div>` regions.
+
 ## Dynamic repeatable form rows (order line items)
 
 Same pattern as before, with less glue:
