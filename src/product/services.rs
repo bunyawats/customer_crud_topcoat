@@ -118,7 +118,15 @@ fn parse_price_cents(raw: &str) -> Result<i32, AppError> {
         ));
     }
 
-    Ok((dollars * 100.0).round() as i32)
+    // `price_cents` is an INTEGER column. Check before casting: `as i32`
+    // saturates, which would silently store a different price.
+    let cents = (dollars * 100.0).round();
+    if cents > f64::from(i32::MAX) {
+        return Err(AppError::Validation(
+            "Price must be at most $21,474,836.47.".into(),
+        ));
+    }
+    Ok(cents as i32)
 }
 
 #[cfg(test)]
@@ -155,6 +163,25 @@ mod tests {
     fn whole_dollar_price_converts_to_cents() {
         let input = validate(form("Widget", "WID-1", "20", "")).unwrap();
         assert_eq!(input.price_cents, 2000);
+    }
+
+    #[test]
+    fn largest_storable_price_is_accepted() {
+        let input = validate(form("Jet", "JET-1", "21474836.47", "")).unwrap();
+        assert_eq!(input.price_cents, i32::MAX);
+    }
+
+    /// `as i32` saturates, so these used to be stored as $21,474,836.47
+    /// without any error.
+    #[test]
+    fn rejects_price_too_large_to_store() {
+        for price in ["21474836.48", "30000000", "1e30"] {
+            let err = validate(form("Jet", "JET-1", price, "")).unwrap_err();
+            assert!(
+                matches!(&err, AppError::Validation(msg) if msg.contains("$21,474,836.47")),
+                "{price}: {err:?}"
+            );
+        }
     }
 
     #[test]

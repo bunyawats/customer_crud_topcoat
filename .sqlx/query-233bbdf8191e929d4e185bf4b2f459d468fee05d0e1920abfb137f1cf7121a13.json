@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            o.id,\n            o.customer_id,\n            c.first_name || ' ' || c.last_name AS \"customer_name!\",\n            o.status,\n            COALESCE(SUM(oi.quantity * oi.unit_price_cents), 0)::bigint AS \"total_cents!\",\n            o.created_at,\n            o.updated_at\n        FROM orders o\n        JOIN customers c ON c.id = o.customer_id\n        LEFT JOIN order_items oi ON oi.order_id = o.id\n        WHERE o.id = $1\n        GROUP BY o.id, c.first_name, c.last_name\n        ",
+  "query": "\n        SELECT\n            o.id,\n            o.customer_id,\n            c.first_name || ' ' || c.last_name AS \"customer_name!\",\n            o.status,\n            -- Widen before multiplying: INTEGER * INTEGER overflows past ~$21.4M.\n            COALESCE(SUM(oi.quantity::bigint * oi.unit_price_cents), 0)::bigint AS \"total_cents!\",\n            o.created_at,\n            o.updated_at\n        FROM orders o\n        JOIN customers c ON c.id = o.customer_id\n        LEFT JOIN order_items oi ON oi.order_id = o.id\n        WHERE o.id = $1\n        GROUP BY o.id, c.first_name, c.last_name\n        ",
   "describe": {
     "columns": [
       {
@@ -86,5 +86,5 @@
       false
     ]
   },
-  "hash": "a3808e2837673921f2e2423dfc3376965d170057e68beec7ea3078ca77cbd723"
+  "hash": "233bbdf8191e929d4e185bf4b2f459d468fee05d0e1920abfb137f1cf7121a13"
 }

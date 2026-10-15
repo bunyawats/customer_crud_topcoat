@@ -34,6 +34,37 @@ async fn create_order_computes_total_from_line_items(pool: PgPool) {
     assert!(response.body.contains("$25.50"));
 }
 
+/// Regression: 6 × $7,000,000 = 4,200,000,000 cents, past `i32::MAX`. The
+/// total used to be multiplied as INTEGER in SQL and fail with "integer out of
+/// range" *after* the order was saved, so every retry added a duplicate.
+#[sqlx::test]
+async fn order_total_beyond_32_bit_cents_renders(pool: PgPool) {
+    let app = App::new(pool.clone());
+    let customer_id = seed_customer(&app, "ada@example.com").await;
+    let car = seed_product(&app, "CAR-555", "7000000.00").await;
+
+    let response = app
+        .htmx_post(
+            "/orders",
+            &order(&customer_id.to_string(), "pending", &[(car, 6)]),
+        )
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{}", response.body);
+    assert!(response.body.contains("$42000000.00"));
+
+    let id: i64 = sqlx::query_scalar("SELECT id FROM orders")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let response = app.htmx_get(&format!("/orders/{id}")).await;
+    assert_eq!(response.status, StatusCode::OK, "{}", response.body);
+    assert!(response.body.contains("$42000000.00"));
+
+    let response = app.get("/orders").await;
+    assert_eq!(response.status, StatusCode::OK);
+    assert!(response.body.contains("$42000000.00"));
+}
+
 #[sqlx::test]
 async fn orders_with_identical_timestamps_list_newest_id_first(pool: PgPool) {
     let app = App::new(pool.clone());

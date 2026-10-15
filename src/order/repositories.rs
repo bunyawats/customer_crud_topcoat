@@ -24,7 +24,8 @@ pub async fn list_page(
             o.customer_id,
             c.first_name || ' ' || c.last_name AS "customer_name!",
             o.status,
-            COALESCE(SUM(oi.quantity * oi.unit_price_cents), 0)::bigint AS "total_cents!",
+            -- Widen before multiplying: INTEGER * INTEGER overflows past ~$21.4M.
+            COALESCE(SUM(oi.quantity::bigint * oi.unit_price_cents), 0)::bigint AS "total_cents!",
             o.created_at,
             o.updated_at
         FROM orders o
@@ -68,7 +69,8 @@ pub async fn find(pool: &PgPool, id: i64) -> Result<Option<OrderSummary>, sqlx::
             o.customer_id,
             c.first_name || ' ' || c.last_name AS "customer_name!",
             o.status,
-            COALESCE(SUM(oi.quantity * oi.unit_price_cents), 0)::bigint AS "total_cents!",
+            -- Widen before multiplying: INTEGER * INTEGER overflows past ~$21.4M.
+            COALESCE(SUM(oi.quantity::bigint * oi.unit_price_cents), 0)::bigint AS "total_cents!",
             o.created_at,
             o.updated_at
         FROM orders o
