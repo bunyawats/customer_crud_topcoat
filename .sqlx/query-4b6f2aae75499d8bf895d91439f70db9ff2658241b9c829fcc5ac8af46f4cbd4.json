@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT criteria::text AS \"criteria!\" FROM list_filters\n        WHERE session_hash = $1 AND resource = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "criteria!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4b6f2aae75499d8bf895d91439f70db9ff2658241b9c829fcc5ac8af46f4cbd4"
+}

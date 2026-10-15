@@ -26,12 +26,12 @@ flowchart LR
         errors["handle_errors #[layer]<br/>AppError → alert fragment or error page"]
         layout["root #[layout]<br/>ui::shell (pages only)"]
         web["src/app/*<br/>#[page] / #[route] handlers, view! components"]
-        domain["domain services<br/>customer / product / order / selection"]
+        domain["domain services<br/>customer / product / order /<br/>selection / filter"]
         repos["repositories<br/>SQLx compile-checked queries"]
         assets["AssetBundle<br/>hashed, cache-forever URLs"]
     end
 
-    db[("PostgreSQL<br/>customers, products, orders,<br/>order_items, selected_items")]
+    db[("PostgreSQL<br/>customers, products, orders, order_items,<br/>selected_items, list_filters")]
     fonts["Google Fonts"]
 
     html -- "GET page / htmx GET POST PUT DELETE" --> router
@@ -49,11 +49,13 @@ flowchart LR
 - **Errors** all leave through the one `handle_errors` layer; handlers just use `?`
   ([details](interaction-diagrams/13-errors.md)).
 - **State** is all in Postgres, including each browser's list selection
-  ([`selected_items`](er-diagram.md#selection-storage)). The process keeps only the pool and a
+  ([`selected_items`](er-diagram.md#selection-storage)) and search criteria
+  ([`list_filters`](er-diagram.md#filter-storage)). The process keeps only the pool and a
   30-second cache of list counts, which is safe to lose.
 - **Every list interaction has the same shape:** the browser sends only what the user did plus the
   current `page`/`query_id` (hidden inputs, via `hx-include`); the server re-reads its own state
-  and answers with the fragments to swap.
+  (selection and search filter) and answers with the fragments to swap. Search criteria are sent
+  once, to `/search`, and never again.
 
 ### Build and dev tooling
 
@@ -89,6 +91,7 @@ flowchart TB
         product["product::services"]
         order["order::services"]
         selection["selection::services"]
+        filter["filter::services"]
     end
 
     helpers["pagination.rs, bulk.rs<br/>page + count cache, batch fan-out"]
@@ -108,5 +111,6 @@ flowchart TB
 - **Customer/product ↔ order is a two-way service dependency**, through services only (never each
   other's repositories): customers and products ask orders "is anything still using this?" before
   deleting, and orders ask customers/products "does this exist, what's its price?" when saving.
-- `pagination`, `bulk`, `selection` are the shared pieces behind the list screens (paging,
-  bulk delete, multi-select). `ui.rs` also reads `pagination::Page`, only to render the pager.
+- `pagination`, `bulk`, `selection`, `filter` are the shared pieces behind the list screens
+  (paging, bulk delete, multi-select, stored search criteria). The resource services take a
+  `filter::ListFilter` and turn it into their own `WHERE` clause. `ui.rs` also reads `pagination::Page`, only to render the pager.

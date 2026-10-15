@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COUNT(*) AS \"count!\" FROM customers\n        WHERE id = ANY($1)\n          AND (first_name || ' ' || last_name ILIKE $2\n               OR email ILIKE $2\n               OR phone ILIKE $2)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8Array",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "cb652792cb9c4c382fb5ce6730bac2a3f02c23903d77bf19fab448e9c5ec83bf"
+}

@@ -15,16 +15,50 @@ pub async fn list(pool: &PgPool) -> Result<Vec<Product>, sqlx::Error> {
     .await
 }
 
-pub async fn count(pool: &PgPool) -> Result<i64, sqlx::Error> {
-    sqlx::query_scalar!(r#"SELECT COUNT(*) AS "count!" FROM products"#)
-        .fetch_one(pool)
-        .await
+/// Products matching `pattern` (an escaped `ILIKE` pattern from
+/// `filter::Search::like_pattern`) on name, SKU or description; all of them
+/// when `None`.
+pub async fn count(pool: &PgPool, pattern: Option<&str>) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*) AS "count!" FROM products
+        WHERE $1::text IS NULL
+           OR name ILIKE $1
+           OR sku ILIKE $1
+           OR description ILIKE $1
+        "#,
+        pattern
+    )
+    .fetch_one(pool)
+    .await
 }
 
-/// One page of [`list`]'s order. The `id` tiebreaker keeps `OFFSET` paging
-/// stable when names tie.
+/// How many of `ids` match `pattern` the way [`count`] does.
+pub async fn count_matching_ids(
+    pool: &PgPool,
+    ids: &[i64],
+    pattern: &str,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*) AS "count!" FROM products
+        WHERE id = ANY($1)
+          AND (name ILIKE $2
+               OR sku ILIKE $2
+               OR description ILIKE $2)
+        "#,
+        ids,
+        pattern
+    )
+    .fetch_one(pool)
+    .await
+}
+
+/// One page of [`list`]'s order, filtered like [`count`]. The `id`
+/// tiebreaker keeps `OFFSET` paging stable when names tie.
 pub async fn list_page(
     pool: &PgPool,
+    pattern: Option<&str>,
     limit: i64,
     offset: i64,
 ) -> Result<Vec<Product>, sqlx::Error> {
@@ -33,9 +67,14 @@ pub async fn list_page(
         r#"
         SELECT id, name, sku, price_cents, description, created_at, updated_at
         FROM products
+        WHERE $1::text IS NULL
+           OR name ILIKE $1
+           OR sku ILIKE $1
+           OR description ILIKE $1
         ORDER BY name, id
-        LIMIT $1 OFFSET $2
+        LIMIT $2 OFFSET $3
         "#,
+        pattern,
         limit,
         offset
     )

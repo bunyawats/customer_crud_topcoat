@@ -15,16 +15,50 @@ pub async fn list(pool: &PgPool) -> Result<Vec<Customer>, sqlx::Error> {
     .await
 }
 
-pub async fn count(pool: &PgPool) -> Result<i64, sqlx::Error> {
-    sqlx::query_scalar!(r#"SELECT COUNT(*) AS "count!" FROM customers"#)
-        .fetch_one(pool)
-        .await
+/// Customers matching `pattern` (an escaped `ILIKE` pattern from
+/// `filter::Search::like_pattern`) on full name, email or phone; all of them
+/// when `None`.
+pub async fn count(pool: &PgPool, pattern: Option<&str>) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*) AS "count!" FROM customers
+        WHERE $1::text IS NULL
+           OR first_name || ' ' || last_name ILIKE $1
+           OR email ILIKE $1
+           OR phone ILIKE $1
+        "#,
+        pattern
+    )
+    .fetch_one(pool)
+    .await
 }
 
-/// One page of [`list`]'s order. The `id` tiebreaker keeps `OFFSET` paging
-/// stable when names tie.
+/// How many of `ids` match `pattern` the way [`count`] does.
+pub async fn count_matching_ids(
+    pool: &PgPool,
+    ids: &[i64],
+    pattern: &str,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*) AS "count!" FROM customers
+        WHERE id = ANY($1)
+          AND (first_name || ' ' || last_name ILIKE $2
+               OR email ILIKE $2
+               OR phone ILIKE $2)
+        "#,
+        ids,
+        pattern
+    )
+    .fetch_one(pool)
+    .await
+}
+
+/// One page of [`list`]'s order, filtered like [`count`]. The `id`
+/// tiebreaker keeps `OFFSET` paging stable when names tie.
 pub async fn list_page(
     pool: &PgPool,
+    pattern: Option<&str>,
     limit: i64,
     offset: i64,
 ) -> Result<Vec<Customer>, sqlx::Error> {
@@ -33,9 +67,14 @@ pub async fn list_page(
         r#"
         SELECT id, first_name, last_name, email, phone, created_at, updated_at
         FROM customers
+        WHERE $1::text IS NULL
+           OR first_name || ' ' || last_name ILIKE $1
+           OR email ILIKE $1
+           OR phone ILIKE $1
         ORDER BY last_name, first_name, id
-        LIMIT $1 OFFSET $2
+        LIMIT $2 OFFSET $3
         "#,
+        pattern,
         limit,
         offset
     )

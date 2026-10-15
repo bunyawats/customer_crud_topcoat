@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COUNT(*) AS \"count!\" FROM products\n        WHERE $1::text IS NULL\n           OR name ILIKE $1\n           OR sku ILIKE $1\n           OR description ILIKE $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "aab47cd96eb7d54708d7dc27ccee0f11a6bf08be311c3ea9a749e670db419888"
+}

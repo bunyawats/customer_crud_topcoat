@@ -6,6 +6,7 @@ sequenceDiagram
     participant H as res::selection::update_selection
     participant SelS as selection::services
     participant SelR as selection::repositories
+    participant FS as filter::services
     participant S as res::services
     participant R as res::repositories
     participant DB as PostgreSQL
@@ -22,7 +23,8 @@ sequenceDiagram
     SelS->>SelR: get
     SelR->>DB: SELECT item_id FROM selected_items
     SelS-->>H: selection after the change
-    H->>S: list_page(included page, query_id)
+    H->>FS: get(session) via app::list_filter
+    H->>S: list_page(included page, query_id, filter)
     S->>R: list_page (count only on a cache miss)
     R->>DB: SELECT ... LIMIT 10 OFFSET ...
     H-->>B: list region + toolbar (OOB) with the new count

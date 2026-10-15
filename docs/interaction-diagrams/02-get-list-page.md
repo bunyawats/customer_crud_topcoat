@@ -6,6 +6,7 @@ sequenceDiagram
     participant H as res::index
     participant SelS as selection::services
     participant SelR as selection::repositories
+    participant FS as filter::services
     participant S as res::services
     participant R as res::repositories
     participant DB as PostgreSQL
@@ -15,19 +16,22 @@ sequenceDiagram
         SelS->>SelR: clear
         SelR->>DB: DELETE FROM selected_items (this session, this resource)
     end
-    H->>S: list_page(page 1, no query_id)
+    H->>FS: get(session) via app::list_filter (kept: a visit clears ticks, not the search)
+    FS->>DB: SELECT criteria FROM list_filters
+    H->>S: list_page(page 1, no query_id, filter)
     S->>S: pagination::fetch_page: cache miss
-    S->>R: count
+    S->>R: count(filter pattern)
     R->>DB: SELECT COUNT(*)
     S->>S: mint query_id, cache the total for 30 s
-    S->>R: list_page(10, 0)
+    S->>R: list_page(pattern, 10, 0)
     R->>DB: SELECT ... ORDER BY ... LIMIT 10 OFFSET 0
     R-->>S: rows
     S-->>H: Page (rows, total, query_id)
-    H-->>B: 200 page: shell + header + toolbar (0 selected) + list region
+    H-->>B: 200 page: shell + header + search box (pre-filled) + toolbar (0 selected) + list region
 ```
 
-A fresh visit always starts with nothing selected. Viewing a page never starts a session.
+A fresh visit always starts with nothing selected, but keeps the stored search: the box comes back
+pre-filled and the list filtered ([14](14-post-search.md)). Viewing a page never starts a session.
 
 ---
 [All endpoints](README.md) · [Per-resource differences](README.md#per-resource-differences) · [Errors](13-errors.md)

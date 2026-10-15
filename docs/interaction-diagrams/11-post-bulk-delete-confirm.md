@@ -6,6 +6,7 @@ sequenceDiagram
     participant H as res::bulk_delete::confirm
     participant SelS as selection::services
     participant SelR as selection::repositories
+    participant FS as filter::services
     participant S as res::services
     participant R as res::repositories
     participant DB as PostgreSQL
@@ -22,11 +23,18 @@ sequenceDiagram
             Note over H,S: NotFound (deleted elsewhere): dropped from the list
         end
     end
+    opt a search is stored
+        H->>FS: get(session) via app::list_filter
+        H->>S: count_outside(listed ids, filter)
+        S->>R: count_matching_ids
+        R->>DB: SELECT COUNT(*) ... WHERE id = ANY(ids) AND ... ILIKE pattern
+    end
     H-->>B: confirm dialog: the rows, or "Nothing is selected", or the over-cap error
     B->>B: swap into the dialog content, app.js opens the dialog
 ```
 
-The dialog's form carries only `page`; it never sends ids.
+The dialog's form carries only `page`; it never sends ids. Selected rows hidden by the current
+search are still listed (and deleted); the dialog adds "N of these aren't in the current search."
 
 ---
 [All endpoints](README.md) · [Per-resource differences](README.md#per-resource-differences) · [Errors](13-errors.md)

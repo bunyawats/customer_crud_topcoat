@@ -4,22 +4,46 @@ use super::models::{NewProduct, Product, ProductForm};
 use super::repositories as repo;
 use crate::bulk::{self, BulkResult};
 use crate::error::AppError;
+use crate::filter::ListFilter;
 use crate::pagination::{self, PAGE_SIZE, Page, PageRequest};
 
 pub async fn list(pool: &PgPool) -> Result<Vec<Product>, AppError> {
     Ok(repo::list(pool).await?)
 }
 
-/// One page of the list, reusing the cached total when `request` carries a
-/// still-valid `query_id`.
-pub async fn list_page(pool: &PgPool, request: PageRequest) -> Result<Page<Product>, AppError> {
+/// One page of the list under `filter`, reusing the cached total when
+/// `request` carries a `query_id` minted for the same filter.
+pub async fn list_page(
+    pool: &PgPool,
+    request: PageRequest,
+    filter: &ListFilter,
+) -> Result<Page<Product>, AppError> {
+    let pattern = filter.search.like_pattern();
+    let pattern = pattern.as_deref();
     pagination::fetch_page(
         request,
-        "products",
-        async || Ok(repo::count(pool).await?),
-        async |limit, offset| Ok(repo::list_page(pool, limit, offset).await?),
+        &filter.cache_key("products"),
+        async || Ok(repo::count(pool, pattern).await?),
+        async |limit, offset| Ok(repo::list_page(pool, pattern, limit, offset).await?),
     )
     .await
+}
+
+/// How many of `ids` the list hides under `filter` (for the bulk-delete
+/// confirm: selected rows outside the current search). Pass ids that
+/// still exist: a missing id counts as hidden.
+pub async fn count_outside(
+    pool: &PgPool,
+    ids: &[i64],
+    filter: &ListFilter,
+) -> Result<usize, AppError> {
+    let Some(pattern) = filter.search.like_pattern() else {
+        return Ok(0);
+    };
+    let matching = repo::count_matching_ids(pool, ids, &pattern).await?;
+    Ok(ids
+        .len()
+        .saturating_sub(usize::try_from(matching).unwrap_or(0)))
 }
 
 /// The 1-based page that shows product `id` (e.g. a just-created record).

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, first_name, last_name, email, phone, created_at, updated_at\n        FROM customers\n        ORDER BY last_name, first_name, id\n        LIMIT $1 OFFSET $2\n        ",
+  "query": "\n        SELECT id, first_name, last_name, email, phone, created_at, updated_at\n        FROM customers\n        WHERE $1::text IS NULL\n           OR first_name || ' ' || last_name ILIKE $1\n           OR email ILIKE $1\n           OR phone ILIKE $1\n        ORDER BY last_name, first_name, id\n        LIMIT $2 OFFSET $3\n        ",
   "describe": {
     "columns": [
       {
@@ -83,6 +83,7 @@
     ],
     "parameters": {
       "Left": [
+        "Text",
         "Int8",
         "Int8"
       ]
@@ -97,5 +98,5 @@
       false
     ]
   },
-  "hash": "d6bce13eb528ec0fc5749544e78d8511eb31e2d872568f4ac76def487012921f"
+  "hash": "7f465731a7e6fd4b964ecc92701856335b2c89e4d8462b22ba4de40121c6b306"
 }

@@ -7,6 +7,7 @@ sequenceDiagram
     participant H as res::bulk_delete
     participant SelS as selection::services
     participant SelR as selection::repositories
+    participant FS as filter::services
     participant S as res::services
     participant R as repositories
     participant DB as PostgreSQL
@@ -33,7 +34,8 @@ sequenceDiagram
         H->>SelS: clear(session), forget_item(each deleted id)
         SelS->>SelR: clear, forget_item
         SelR->>DB: DELETE FROM selected_items
-        H->>S: list_page(page, fresh count)
+        H->>FS: get(session) via app::list_filter
+        H->>S: list_page(page, fresh count, filter)
         S->>R: count, list_page
         R->>DB: SELECT COUNT(*), SELECT ... LIMIT 10 OFFSET ...
         H-->>B: result dialog + list region (OOB) + toolbar (OOB)

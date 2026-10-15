@@ -7,6 +7,7 @@ pub(crate) mod bulk_delete;
 pub(crate) mod new;
 pub(crate) mod page;
 pub(crate) mod product_id;
+pub(crate) mod search;
 pub(crate) mod selection;
 
 use topcoat::{
@@ -18,9 +19,10 @@ use topcoat::{
 
 use std::collections::HashSet;
 
-use super::{clear_selection, pool, selected_ids};
+use super::{clear_filter, clear_selection, list_filter, pool, selected_ids};
 use crate::{
     error::AppError,
+    filter::ListFilter,
     pagination::{Page, PageRequest},
     product::{
         models::{Product, ProductForm},
@@ -38,6 +40,7 @@ pub(crate) const RESOURCE: Resource = Resource::Products;
 /// Id of the selection toolbar above the list (sent out-of-band on changes).
 pub(crate) const TOOLBAR_ID: &str = "product-toolbar";
 const LIST_TARGET: &str = "#product-list";
+const SEARCH_ID: &str = "product-search";
 /// Columns after the selection box. Fixed widths for the short, regular
 /// data; name and description share the rest.
 const COLUMNS: &[Column] = &[
@@ -100,31 +103,41 @@ impl From<Product> for ProductRow {
 pub(crate) async fn index(cx: &Cx) -> Result<impl View> {
     clear_selection(cx, RESOURCE).await?;
     let selected = HashSet::new();
-    let listing = service::list_page(pool(cx), PageRequest::first())
+    let filter = list_filter(cx, RESOURCE).await?;
+    let listing = service::list_page(pool(cx), PageRequest::first(), &filter)
         .await?
         .map(ProductRow::from);
     let new_url = href!(new::new_form).resolve(cx);
 
     Ok(view! {
         ui::page_header(title: "Products", add_label: "Add product", new_url: &new_url)
+        product_search(value: filter.search.as_str())
         product_toolbar(count: 0)
-        product_list(listing: listing, selected: &selected)
+        product_list(listing: listing, filter: &filter, selected: &selected)
     })
 }
 
 /// `POST /products` - creates the product, then re-renders the list on the
 /// page that holds it (so the new row is visible in its sorted position).
+/// It clears the stored search first (and empties the box out-of-band), so
+/// a new row that doesn't match can't vanish.
 #[route(POST)]
 pub(crate) async fn create(cx: &Cx, Form(form): Form<ProductForm>) -> Result<ViewHandle> {
     let id = service::create(pool(cx), form).await?.id;
     let page = service::page_of(pool(cx), id).await?;
-    let listing = service::list_page(pool(cx), PageRequest::new(page, ""))
+    clear_filter(cx, RESOURCE).await?;
+    let filter = ListFilter::default();
+    let listing = service::list_page(pool(cx), PageRequest::new(page, ""), &filter)
         .await?
         .map(ProductRow::from);
     let selected = selected_ids(cx, RESOURCE).await?;
-    view! { cx => product_list(listing: listing, selected: &selected) }
-        .single()
-        .await
+    view! {
+        cx =>
+        product_list(listing: listing, filter: &filter, selected: &selected)
+        product_search(value: "", oob: true)
+    }
+    .single()
+    .await
 }
 
 /// The `#product-list` region: hidden list state, the table and its pager.
@@ -133,6 +146,7 @@ pub(crate) async fn create(cx: &Cx, Form(form): Form<ProductForm>) -> Result<Vie
 pub(crate) async fn product_list(
     cx: &Cx,
     listing: Page<ProductRow>,
+    filter: &ListFilter,
     selected: &HashSet<i64>,
     #[default] oob: bool,
 ) -> Result<impl View> {
@@ -160,11 +174,36 @@ pub(crate) async fn product_list(
                     )
                 )
                 <tbody id="rows-body">
-                    product_rows(products: products, selected: selected)
+                    product_rows(
+                        products: products,
+                        search: filter.search.as_str(),
+                        selected: selected
+                    )
                 </tbody>
                 ui::pager(colspan: 7, url: &page_url, list_id: LIST_ID, info: &pager)
             )
         </div>
+    })
+}
+
+/// This list's search box (see [`ui::search_form`]), showing `value`.
+#[component]
+pub(crate) async fn product_search(
+    cx: &Cx,
+    value: &str,
+    #[default] oob: bool,
+) -> Result<impl View> {
+    let search_url = href!(search::run_search).resolve(cx);
+    Ok(view! {
+        ui::search_form(
+            id: SEARCH_ID,
+            url: &search_url,
+            list_id: LIST_ID,
+            label: "Search products",
+            placeholder: "Name, SKU or description",
+            value: value,
+            oob: oob
+        )
     })
 }
 
@@ -208,10 +247,18 @@ pub(crate) async fn bulk_items(cx: &Cx, ids: &[i64]) -> Result<Vec<ui::BulkItem>
 #[component]
 pub(crate) async fn product_rows(
     products: Vec<ProductRow>,
+    search: &str,
     selected: &HashSet<i64>,
 ) -> Result<impl View> {
+    let no_match = format!("No products match “{search}”.");
     Ok(view! {
-        if products.is_empty() {
+        if products.is_empty() && !search.is_empty() {
+            ui::empty_rows(
+                colspan: 7,
+                title: &no_match,
+                hint: "Clear the search to see every product."
+            )
+        } else if products.is_empty() {
             ui::empty_rows(
                 colspan: 7,
                 title: "The catalog is empty.",

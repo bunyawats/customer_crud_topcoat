@@ -7,6 +7,7 @@ sequenceDiagram
     participant H as res::create
     participant S as res::services
     participant O as customer / product services
+    participant FS as filter::services
     participant R as repositories
     participant DB as PostgreSQL
     B->>L: POST /customers (form fields, orders send items_json)
@@ -27,7 +28,9 @@ sequenceDiagram
         H->>S: page_of(new id)
         S->>R: position_of
         R->>DB: COUNT rows sorting before it
-        H->>S: list_page(that page, no query_id)
+        H->>FS: clear(session) via app::clear_filter (so the new row can't be filtered out)
+        FS->>DB: DELETE FROM list_filters
+        H->>S: list_page(that page, no query_id, no filter)
         S->>R: count, then list_page
         R->>DB: SELECT COUNT(*), SELECT ... LIMIT 10 OFFSET ...
         H-->>B: list region on the page holding the new row

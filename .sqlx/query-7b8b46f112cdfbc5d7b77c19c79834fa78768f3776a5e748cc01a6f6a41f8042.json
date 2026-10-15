@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COUNT(*) AS \"count!\"\n        FROM orders o\n        JOIN customers c ON c.id = o.customer_id\n        WHERE o.id = ANY($1)\n          AND (o.id = $3 OR c.first_name || ' ' || c.last_name ILIKE $2)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8Array",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7b8b46f112cdfbc5d7b77c19c79834fa78768f3776a5e748cc01a6f6a41f8042"
+}

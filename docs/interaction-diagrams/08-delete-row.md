@@ -8,6 +8,7 @@ sequenceDiagram
     participant S as res::services
     participant OS as order::services
     participant R as repositories
+    participant FS as filter::services
     participant SelS as selection::services
     participant SelR as selection::repositories
     participant DB as PostgreSQL
@@ -28,7 +29,8 @@ sequenceDiagram
     H->>SelS: forget_item(Customers, 7)
     SelS->>SelR: forget_item
     SelR->>DB: DELETE FROM selected_items (every session)
-    H->>S: list_page(page 3 from #[query_params], fresh count, clamped)
+    H->>FS: get(session) via app::list_filter
+    H->>S: list_page(page 3 from #[query_params], fresh count, clamped, filter)
     S->>R: count, list_page
     R->>DB: SELECT COUNT(*), SELECT ... LIMIT 10 OFFSET 20
     H->>SelS: get(session) via app::selected_ids

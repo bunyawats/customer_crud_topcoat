@@ -10,14 +10,16 @@ use topcoat::{
 
 use super::super::{RESOURCE, bulk_items};
 use crate::{
-    app::{PageForm, pool, session_key},
+    app::{PageForm, list_filter, pool, session_key},
     bulk,
+    product::services as service,
     selection::services as selection,
     ui,
 };
 
 /// Lists the selected products with fresh names (stale ids dropped), or
-/// explains why nothing can be deleted (empty, or over the batch cap).
+/// explains why nothing can be deleted (empty, or over the batch cap), and
+/// says how many of them the current search hides.
 #[route(POST)]
 pub(crate) async fn confirm_bulk_delete(cx: &Cx, Form(form): Form<PageForm>) -> Result<ViewHandle> {
     let ids = match session_key(cx).await? {
@@ -34,6 +36,9 @@ pub(crate) async fn confirm_bulk_delete(cx: &Cx, Form(form): Form<PageForm>) -> 
     } else {
         Vec::new()
     };
+    let shown: Vec<i64> = items.iter().map(|item| item.id).collect();
+    let filter = list_filter(cx, RESOURCE).await?;
+    let hidden = service::count_outside(pool(cx), &shown, &filter).await?;
     let execute_url = href!(super::execute_bulk_delete).resolve(cx);
     view! {
         cx =>
@@ -43,7 +48,8 @@ pub(crate) async fn confirm_bulk_delete(cx: &Cx, Form(form): Form<PageForm>) -> 
             items: &items,
             error: error.as_deref(),
             execute_url: &execute_url,
-            page: form.page()
+            page: form.page(),
+            hidden: hidden
         )
     }
     .single()

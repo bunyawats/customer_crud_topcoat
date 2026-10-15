@@ -2,17 +2,60 @@ use sqlx::PgPool;
 
 use super::models::{NewOrder, NewOrderItem, OrderItemDetail, OrderSummary};
 
-pub async fn count(pool: &PgPool) -> Result<i64, sqlx::Error> {
-    sqlx::query_scalar!(r#"SELECT COUNT(*) AS "count!" FROM orders"#)
-        .fetch_one(pool)
-        .await
+/// Orders whose id is `order_id` or whose customer's full name matches
+/// `pattern` (an escaped `ILIKE` pattern from `filter::Search`); all of them
+/// when both are `None`.
+pub async fn count(
+    pool: &PgPool,
+    pattern: Option<&str>,
+    order_id: Option<i64>,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*) AS "count!"
+        FROM orders o
+        JOIN customers c ON c.id = o.customer_id
+        WHERE ($1::text IS NULL AND $2::bigint IS NULL)
+           OR o.id = $2
+           OR c.first_name || ' ' || c.last_name ILIKE $1
+        "#,
+        pattern,
+        order_id
+    )
+    .fetch_one(pool)
+    .await
+}
+
+/// How many of `ids` match `pattern`/`order_id` the way [`count`] does.
+pub async fn count_matching_ids(
+    pool: &PgPool,
+    ids: &[i64],
+    pattern: Option<&str>,
+    order_id: Option<i64>,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*) AS "count!"
+        FROM orders o
+        JOIN customers c ON c.id = o.customer_id
+        WHERE o.id = ANY($1)
+          AND (o.id = $3 OR c.first_name || ' ' || c.last_name ILIKE $2)
+        "#,
+        ids,
+        pattern,
+        order_id
+    )
+    .fetch_one(pool)
+    .await
 }
 
 /// One page of orders, newest first. `o.id DESC` breaks `created_at` ties
 /// (rows inserted in one transaction share `now()`), which also keeps
-/// `OFFSET` paging stable.
+/// `OFFSET` paging stable. Filtered like [`count`].
 pub async fn list_page(
     pool: &PgPool,
+    pattern: Option<&str>,
+    order_id: Option<i64>,
     limit: i64,
     offset: i64,
 ) -> Result<Vec<OrderSummary>, sqlx::Error> {
@@ -31,10 +74,15 @@ pub async fn list_page(
         FROM orders o
         JOIN customers c ON c.id = o.customer_id
         LEFT JOIN order_items oi ON oi.order_id = o.id
+        WHERE ($1::text IS NULL AND $2::bigint IS NULL)
+           OR o.id = $2
+           OR c.first_name || ' ' || c.last_name ILIKE $1
         GROUP BY o.id, c.first_name, c.last_name
         ORDER BY o.created_at DESC, o.id DESC
-        LIMIT $1 OFFSET $2
+        LIMIT $3 OFFSET $4
         "#,
+        pattern,
+        order_id,
         limit,
         offset
     )

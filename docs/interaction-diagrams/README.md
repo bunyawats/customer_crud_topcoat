@@ -6,20 +6,24 @@ the `#[page]` / `#[route]` handlers under [`src/app/`](../../src/app/) (module p
 the tables.
 
 Conventions used below:
-- `<res>` is `customers`, `products` or `orders`; `{id}` is that resource's numeric id. The 11
+- `<res>` is `customers`, `products` or `orders`; `{id}` is that resource's numeric id. The 12
   per-resource endpoints behave the same for all three; differences are listed in
   [Per-resource differences](#per-resource-differences).
 - **Page** = full HTML document (wrapped in the root layout). **Fragment** = bare HTML for htmx to
   swap. **OOB** = an extra out-of-band fragment in the same response (`hx-swap-oob`).
 - **Layers, in every diagram:** handler (`src/app/…`) → `<res>::services` (rules, validation) →
   `<res>::repositories` (SQLx, the only code that runs SQL) → PostgreSQL. Multi-select state goes
-  the same way through `selection::services` → `selection::repositories`. Calls into another
+  the same way through `selection::services` → `selection::repositories`, and stored search
+  criteria through `filter::services` → `filter::repositories`. Calls into another
   resource always go through its *services*, never its repositories (e.g. a customer delete asks
   `order::services::count_for_customer`).
 - Every request passes through the `handle_errors` layer; the diagrams show it only where it does
   something. Its error behaviour is in [13-errors.md](13-errors.md).
 - "List state" = the hidden `page` / `query_id` inputs in `#<res>-list-state`, sent with
   `hx-include` so the server can re-render the page the user is on.
+- "Stored filter" = this browser's search criteria for the list (`list_filters`), set only by
+  [14](14-post-search.md). Every endpoint that renders the list region reads it with
+  `app::list_filter` (no session → no filter); the page never sends criteria anywhere else.
 
 ## Catalogue
 
@@ -37,11 +41,12 @@ Conventions used below:
 | [10](10-post-selection.md) | POST | `/<res>/selection` | `<res>::selection::update_selection` | row checkbox, select-all | Fragment: list region + toolbar OOB | row: `none`; select-all: `#<res>-list` outerHTML |
 | [11](11-post-bulk-delete-confirm.md) | POST | `/<res>/bulk-delete/confirm` | `<res>::bulk_delete::confirm::confirm_bulk_delete` | toolbar "Delete selected" | Fragment: confirm dialog | `#dialog-content` innerHTML |
 | [12](12-post-bulk-delete.md) | POST | `/<res>/bulk-delete` | `<res>::bulk_delete::execute_bulk_delete` | confirm dialog submit | Fragment: result dialog + list OOB + toolbar OOB | `#dialog-content` innerHTML |
+| [14](14-post-search.md) | POST | `/<res>/search` | `<res>::search::run_search` | search form (Enter / Search), Clear | Fragment: list region (+ emptied search box OOB on Clear) | `#<res>-list` outerHTML |
 | [-](13-errors.md) | any | unrouted path | `not_found!()` catch-all | anything | 404 error page / alert | - |
 | - | GET | `/assets/…` | asset bundle | `<link>`, `<script>` | CSS / JS, cache-forever | - |
 
 <details>
-<summary>All 34 concrete endpoints</summary>
+<summary>All 37 concrete endpoints</summary>
 
 ```
 GET    /                                   (redirect)
@@ -49,6 +54,7 @@ GET    /customers                          GET    /products                     
 POST   /customers                          POST   /products                          POST   /orders
 GET    /customers/new                      GET    /products/new                      GET    /orders/new
 POST   /customers/page                     POST   /products/page                     POST   /orders/page
+POST   /customers/search                   POST   /products/search                   POST   /orders/search
 POST   /customers/selection                POST   /products/selection                POST   /orders/selection
 POST   /customers/bulk-delete/confirm      POST   /products/bulk-delete/confirm      POST   /orders/bulk-delete/confirm
 POST   /customers/bulk-delete              POST   /products/bulk-delete              POST   /orders/bulk-delete
@@ -65,6 +71,7 @@ The **#** column links to each endpoint's diagram.
 
 | | Customers | Products | Orders |
 |---|---|---|---|
+| Search matches (case-insensitive "contains") | full name, email, phone | name, SKU, description | order number (exact, `12` or `#12`) or customer full name |
 | List order | `last_name, first_name, id` | `name, id` | `created_at DESC, id DESC` |
 | Create / update validation | names required, email has `@`; duplicate email → 422 | name, SKU required; price 0 to $21,474,836.47; duplicate SKU → 422 | customer and every product must exist; ≥ 1 line item; prices snapshotted from products |
 | New / edit form also loads | - | - | all customers and products (dropdowns) |

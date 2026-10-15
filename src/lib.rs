@@ -14,6 +14,7 @@ pub mod app;
 pub mod bulk;
 pub mod customer;
 pub mod error;
+pub mod filter;
 pub mod order;
 pub mod pagination;
 pub mod product;

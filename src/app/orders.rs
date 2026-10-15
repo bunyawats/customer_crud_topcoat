@@ -7,6 +7,7 @@ pub(crate) mod bulk_delete;
 pub(crate) mod new;
 pub(crate) mod order_id;
 pub(crate) mod page;
+pub(crate) mod search;
 pub(crate) mod selection;
 
 use std::collections::HashSet;
@@ -19,10 +20,11 @@ use topcoat::{
     view::{View, ViewExt, ViewHandle, class, component, view},
 };
 
-use super::{clear_selection, pool, selected_ids};
+use super::{clear_filter, clear_selection, list_filter, pool, selected_ids};
 use crate::{
     customer::services as customer_service,
     error::AppError,
+    filter::ListFilter,
     order::{
         models::{LineItemInput, OrderDetail, OrderForm, OrderSummary, STATUSES},
         services as service,
@@ -41,6 +43,7 @@ pub(crate) const RESOURCE: Resource = Resource::Orders;
 /// Id of the selection toolbar above the list (sent out-of-band on changes).
 pub(crate) const TOOLBAR_ID: &str = "order-toolbar";
 const LIST_TARGET: &str = "#order-list";
+const SEARCH_ID: &str = "order-search";
 /// Columns after the selection box. Fixed widths for the short, regular
 /// data; the customer name takes the rest.
 const COLUMNS: &[Column] = &[
@@ -101,31 +104,41 @@ fn capitalize(s: &str) -> String {
 pub(crate) async fn index(cx: &Cx) -> Result<impl View> {
     clear_selection(cx, RESOURCE).await?;
     let selected = HashSet::new();
-    let listing = service::list_page(pool(cx), PageRequest::first())
+    let filter = list_filter(cx, RESOURCE).await?;
+    let listing = service::list_page(pool(cx), PageRequest::first(), &filter)
         .await?
         .map(OrderRow::from);
     let new_url = href!(new::new_form).resolve(cx);
 
     Ok(view! {
         ui::page_header(title: "Orders", add_label: "Add order", new_url: &new_url)
+        order_search(value: filter.search.as_str())
         order_toolbar(count: 0)
-        order_list(listing: listing, selected: &selected)
+        order_list(listing: listing, filter: &filter, selected: &selected)
     })
 }
 
 /// `POST /orders` - creates the order, then re-renders the list on the
 /// page that holds it (so the new row is visible in its sorted position).
+/// It clears the stored search first (and empties the box out-of-band), so
+/// a new row that doesn't match can't vanish.
 #[route(POST)]
 pub(crate) async fn create(cx: &Cx, Form(form): Form<OrderForm>) -> Result<ViewHandle> {
     let id = service::create(pool(cx), form).await?;
     let page = service::page_of(pool(cx), id).await?;
-    let listing = service::list_page(pool(cx), PageRequest::new(page, ""))
+    clear_filter(cx, RESOURCE).await?;
+    let filter = ListFilter::default();
+    let listing = service::list_page(pool(cx), PageRequest::new(page, ""), &filter)
         .await?
         .map(OrderRow::from);
     let selected = selected_ids(cx, RESOURCE).await?;
-    view! { cx => order_list(listing: listing, selected: &selected) }
-        .single()
-        .await
+    view! {
+        cx =>
+        order_list(listing: listing, filter: &filter, selected: &selected)
+        order_search(value: "", oob: true)
+    }
+    .single()
+    .await
 }
 
 /// The `#order-list` region: hidden list state, the table and its pager.
@@ -134,6 +147,7 @@ pub(crate) async fn create(cx: &Cx, Form(form): Form<OrderForm>) -> Result<ViewH
 pub(crate) async fn order_list(
     cx: &Cx,
     listing: Page<OrderRow>,
+    filter: &ListFilter,
     selected: &HashSet<i64>,
     #[default] oob: bool,
 ) -> Result<impl View> {
@@ -161,11 +175,32 @@ pub(crate) async fn order_list(
                     )
                 )
                 <tbody id="rows-body">
-                    order_rows(orders: orders, selected: selected)
+                    order_rows(
+                        orders: orders,
+                        search: filter.search.as_str(),
+                        selected: selected
+                    )
                 </tbody>
                 ui::pager(colspan: 7, url: &page_url, list_id: LIST_ID, info: &pager)
             )
         </div>
+    })
+}
+
+/// This list's search box (see [`ui::search_form`]), showing `value`.
+#[component]
+pub(crate) async fn order_search(cx: &Cx, value: &str, #[default] oob: bool) -> Result<impl View> {
+    let search_url = href!(search::run_search).resolve(cx);
+    Ok(view! {
+        ui::search_form(
+            id: SEARCH_ID,
+            url: &search_url,
+            list_id: LIST_ID,
+            label: "Search orders",
+            placeholder: "Order # or customer name",
+            value: value,
+            oob: oob
+        )
     })
 }
 
@@ -209,10 +244,18 @@ pub(crate) async fn bulk_items(cx: &Cx, ids: &[i64]) -> Result<Vec<ui::BulkItem>
 #[component]
 pub(crate) async fn order_rows(
     orders: Vec<OrderRow>,
+    search: &str,
     selected: &HashSet<i64>,
 ) -> Result<impl View> {
+    let no_match = format!("No orders match “{search}”.");
     Ok(view! {
-        if orders.is_empty() {
+        if orders.is_empty() && !search.is_empty() {
+            ui::empty_rows(
+                colspan: 7,
+                title: &no_match,
+                hint: "Clear the search to see every order."
+            )
+        } else if orders.is_empty() {
             ui::empty_rows(
                 colspan: 7,
                 title: "The ledger is empty.",

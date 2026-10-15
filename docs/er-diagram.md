@@ -1,11 +1,12 @@
 # ER diagram
 
 Source of truth: [`migrations/`](../migrations/). This page describes the schema as of
-`20261015000000_create_selected_items.sql`; update it in the same change as any new migration.
+`20261016000000_create_list_filters.sql`; update it in the same change as any new migration.
 To check it against a live database: `psql "$DATABASE_URL" -c '\d <table>'`.
 
 Solid lines are real foreign keys. Dashed lines are references the database doesn't enforce
-(`selected_items` points at whichever table its `resource` column names).
+(`selected_items` points at whichever table its `resource` column names). `list_filters` refers to
+no row at all: it holds one browser session's search criteria for one list.
 
 ```mermaid
 erDiagram
@@ -58,6 +59,13 @@ erDiagram
         bigint item_id PK "id in that table, no FK"
         timestamptz selected_at
     }
+
+    LIST_FILTERS {
+        bytea session_hash PK "SHA-256 of the session token"
+        text resource PK "customers | products | orders"
+        jsonb criteria "serialized filter::ListFilter"
+        timestamptz updated_at
+    }
 ```
 
 ## Tables
@@ -69,6 +77,7 @@ erDiagram
 | `orders` | One order by one customer | `id` BIGSERIAL PK; `customer_id` → `customers.id`; `orders_status_check` | `idx_orders_customer_id` |
 | `order_items` | One line of an order | `id` BIGSERIAL PK; `order_id` → `orders.id` **ON DELETE CASCADE**; `product_id` → `products.id`; `quantity > 0` | `idx_order_items_order_id` |
 | `selected_items` | One ticked row on a list screen, for one browser session | PK (`session_hash`, `resource`, `item_id`); `resource` CHECK | `idx_selected_items_selected_at` |
+| `list_filters` | One browser session's search criteria on one list screen | PK (`session_hash`, `resource`); `resource` CHECK | `idx_list_filters_updated_at` |
 
 `created_at` / `updated_at` default to `now()`. Every `id` is a `BIGSERIAL`.
 
@@ -107,6 +116,17 @@ erDiagram
 - A fresh visit to a list page clears that session's rows for the resource; Prev/Next don't.
 - Rows older than one day are purged on the next selection write (`selection::services`,
   `MAX_SELECTION_AGE`); `idx_selected_items_selected_at` serves that delete.
+
+## Filter storage
+
+- `list_filters.criteria` is a JSON `filter::ListFilter` (today `{"search": "ada"}`). New criteria
+  are new fields with serde defaults, so old rows still load; a row that doesn't deserialize is
+  treated as no filter (logged), never an error.
+- Only `POST /<resource>/search` writes it; an empty search deletes the row, so "no filter" is
+  always "no row". Every other list request reads it.
+- A fresh list visit keeps the filter (the box comes back pre-filled) but clears that list's
+  `selected_items`. Creating a record clears the filter.
+- Rows not updated for a day are purged on the next write (`filter::services`, `MAX_FILTER_AGE`).
 
 ## List ordering (for stable paging)
 

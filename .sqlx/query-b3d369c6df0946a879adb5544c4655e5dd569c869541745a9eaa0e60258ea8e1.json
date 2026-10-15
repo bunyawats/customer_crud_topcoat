@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COUNT(*) AS \"count!\" FROM products\n        WHERE id = ANY($1)\n          AND (name ILIKE $2\n               OR sku ILIKE $2\n               OR description ILIKE $2)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8Array",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b3d369c6df0946a879adb5544c4655e5dd569c869541745a9eaa0e60258ea8e1"
+}

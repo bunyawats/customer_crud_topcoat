@@ -22,6 +22,7 @@ pub const SELECT: &str = "mt-1 w-full rounded-lg border border-line bg-paper px-
 const BTN_PRIMARY: &str = "rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-brand-hover";
 const BTN_GHOST: &str = "rounded-lg px-4 py-2 text-sm font-medium text-muted transition-colors hover:bg-paper hover:text-ink";
 const BTN_DANGER: &str = "rounded-lg bg-danger px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-danger/90";
+const BTN_SEARCH: &str = "shrink-0 rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-paper";
 const BTN_TOOLBAR_DANGER: &str = "inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-xs font-medium text-danger transition-colors hover:bg-danger-tint disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent";
 const BTN_PAGER: &str = "rounded-md border border-line px-2.5 py-1 font-medium text-ink transition-colors hover:bg-paper disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent";
 
@@ -307,6 +308,72 @@ pub async fn row_actions(
     })
 }
 
+// --- Search -----------------------------------------------------------------
+
+/// A list's search box, in its own `#<id>` region outside the list and the
+/// toolbar so their re-renders never touch what the user typed. Enter or
+/// "Search" posts `q` to `url` (`POST /<resource>/search`), which stores it
+/// server-side and returns `#<list_id>`; nothing else ever sends criteria.
+/// "Clear" sits outside the `<form>` so it posts only its own empty `q`,
+/// and its response re-renders this region (`oob`) with an empty box.
+#[component]
+pub async fn search_form(
+    id: &str,
+    url: &str,
+    list_id: &str,
+    label: &str,
+    placeholder: &str,
+    value: &str,
+    #[default] oob: bool,
+) -> Result<impl View> {
+    let list_target = format!("#{list_id}");
+    let input_id = format!("{id}-q");
+    Ok(view! {
+        <div
+            id=(id)
+            hx-swap-oob=(oob.then_some("true"))
+            class="mt-6 flex items-center gap-2"
+        >
+            <form
+                role="search"
+                class="flex w-full max-w-md items-center gap-2"
+                hx-post=(url)
+                hx-target=(&list_target)
+                hx-swap="outerHTML"
+            >
+                <label for=(&input_id) class="sr-only">(label)</label>
+                <div class="relative w-full">
+                    <span
+                        class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted"
+                    >
+                        icon(kind: Icon::Search, size: 14)
+                    </span>
+                    <input
+                        id=(&input_id)
+                        type="search"
+                        name="q"
+                        value=(value)
+                        maxlength="100"
+                        placeholder=(placeholder)
+                        class="w-full rounded-lg border border-line bg-surface py-2 pr-3 pl-9 text-sm text-ink placeholder:text-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand-tint"
+                    >
+                </div>
+                <button type="submit" class=(BTN_SEARCH)>"Search"</button>
+            </form>
+            <button
+                type="button"
+                class=(BTN_GHOST)
+                hx-post=(url)
+                hx-vals=r#"{"q": ""}"#
+                hx-target=(&list_target)
+                hx-swap="outerHTML"
+            >
+                "Clear"
+            </button>
+        </div>
+    })
+}
+
 // --- Selection --------------------------------------------------------------
 
 const CHECKBOX: &str = "size-4 cursor-pointer rounded border-line accent-brand align-middle";
@@ -454,7 +521,13 @@ pub async fn bulk_confirm_dialog(
     error: Option<&str>,
     execute_url: &str,
     page: i64,
+    #[default] hidden: usize,
 ) -> Result<impl View> {
+    let hidden_note = if hidden == 1 {
+        "1 of these isn't in the current search.".to_string()
+    } else {
+        format!("{hidden} of these aren't in the current search.")
+    };
     let title = if items.is_empty() {
         format!("Delete {many}")
     } else {
@@ -496,6 +569,9 @@ pub async fn bulk_confirm_dialog(
                         </li>
                     }
                 </ul>
+                if hidden > 0 {
+                    <p class="mt-3 text-sm text-muted">(&hidden_note)</p>
+                }
             }
             <div class="mt-6 flex justify-end gap-2">
                 <button type="button" class=(BTN_GHOST) onclick="crudDialog.close()">
@@ -773,6 +849,7 @@ pub enum Icon {
     Plus,
     X,
     Alert,
+    Search,
 }
 
 /// Feather-style stroke icons, inlined so they inherit `currentColor`.
@@ -816,6 +893,10 @@ pub async fn icon(
                 Icon::X => {
                     <line x1="18" y1="6" x2="6" y2="18"></line>
                     <line x1="6" y1="6" x2="18" y2="18"></line>
+                }
+                Icon::Search => {
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                 }
                 Icon::Alert => {
                     <circle cx="12" cy="12" r="10"></circle>

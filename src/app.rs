@@ -33,6 +33,7 @@ use topcoat::{
 
 use crate::{
     error::AppError,
+    filter::{ListFilter, Search, services as filter},
     pagination::PageRequest,
     selection::{models::Resource, services as selection},
     ui,
@@ -79,6 +80,22 @@ impl PageForm {
     /// The same page with a fresh count, for re-rendering after a write.
     pub(crate) fn after_write(&self) -> PageRequest {
         PageRequest::new(self.page, "")
+    }
+}
+
+/// The search box's one field (`POST /<resource>/search`). The only request
+/// that carries criteria; every other list request reads the stored filter.
+#[derive(Deserialize)]
+pub(crate) struct SearchForm {
+    #[serde(default)]
+    q: String,
+}
+
+impl SearchForm {
+    pub(crate) fn filter(&self) -> Result<ListFilter, AppError> {
+        Ok(ListFilter {
+            search: Search::new(&self.q)?,
+        })
     }
 }
 
@@ -164,6 +181,35 @@ pub(crate) async fn selected_ids(cx: &Cx, resource: Resource) -> Result<HashSet<
         .await?
         .into_iter()
         .collect())
+}
+
+/// This browser's stored search criteria for `resource`'s list (no filter
+/// without a session). Every list re-render reads them here; only the search
+/// route writes them, so the page never carries criteria.
+pub(crate) async fn list_filter(cx: &Cx, resource: Resource) -> Result<ListFilter> {
+    let Some(key) = session_key(cx).await? else {
+        return Ok(ListFilter::default());
+    };
+    Ok(filter::get(pool(cx), &key, resource).await?)
+}
+
+/// Stores `criteria` as this browser's filter for `resource`, starting a
+/// session first if needed (so call it before building the view). Clearing
+/// the filter never starts one.
+pub(crate) async fn save_filter(cx: &Cx, resource: Resource, criteria: &ListFilter) -> Result<()> {
+    if criteria.is_empty() {
+        return clear_filter(cx, resource).await;
+    }
+    let key = ensure_session_key(cx).await?;
+    Ok(filter::set(pool(cx), &key, resource, criteria).await?)
+}
+
+/// Drops this browser's filter for `resource` (e.g. after a create).
+pub(crate) async fn clear_filter(cx: &Cx, resource: Resource) -> Result<()> {
+    if let Some(key) = session_key(cx).await? {
+        filter::clear(pool(cx), &key, resource).await?;
+    }
+    Ok(())
 }
 
 /// `/` has no page of its own.

@@ -3,7 +3,7 @@
 A small customer / product / order ledger built with [Topcoat](https://github.com/tokio-rs/topcoat),
 htmx 4, Tailwind v4 and SQLx + PostgreSQL. It's a port of
 [customer_crud_web](https://github.com/bunyawats/customer_crud_web) (Axum + Askama) with the same
-schema and look, extended with paged lists and bulk delete.
+schema and look, extended with paged lists, search and bulk delete.
 
 - Create, edit and delete customers, products and orders in a modal dialog, without page reloads
 - Orders have any number of line items; totals use prices snapshotted server-side
@@ -12,6 +12,9 @@ schema and look, extended with paged lists and bulk delete.
 - Tick rows on any page, or a whole page at once; the selection is kept server-side, so it
   survives paging. "Delete selected" shows what will go, deletes what it can, and lists anything
   it couldn't (e.g. a customer who still has orders)
+- Search each list (name/email/phone, name/SKU/description, order number/customer). The search is
+  remembered server-side for your browser session, so paging, ticking, deleting and even a reload
+  keep it; ticked rows stay ticked across searches
 - Friendly validation errors (duplicate email/SKU, deleting a customer who still has orders, ...)
   shown as an auto-dismissing alert, without disturbing the page
 

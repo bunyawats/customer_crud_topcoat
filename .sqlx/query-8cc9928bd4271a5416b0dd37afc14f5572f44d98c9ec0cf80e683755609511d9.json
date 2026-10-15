@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COUNT(*) AS \"count!\" FROM customers\n        WHERE $1::text IS NULL\n           OR first_name || ' ' || last_name ILIKE $1\n           OR email ILIKE $1\n           OR phone ILIKE $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8cc9928bd4271a5416b0dd37afc14f5572f44d98c9ec0cf80e683755609511d9"
+}

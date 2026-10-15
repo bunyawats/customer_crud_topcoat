@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            o.id,\n            o.customer_id,\n            c.first_name || ' ' || c.last_name AS \"customer_name!\",\n            o.status,\n            -- Widen before multiplying: INTEGER * INTEGER overflows past ~$21.4M.\n            COALESCE(SUM(oi.quantity::bigint * oi.unit_price_cents), 0)::bigint AS \"total_cents!\",\n            o.created_at,\n            o.updated_at\n        FROM orders o\n        JOIN customers c ON c.id = o.customer_id\n        LEFT JOIN order_items oi ON oi.order_id = o.id\n        GROUP BY o.id, c.first_name, c.last_name\n        ORDER BY o.created_at DESC, o.id DESC\n        LIMIT $1 OFFSET $2\n        ",
+  "query": "\n        SELECT\n            o.id,\n            o.customer_id,\n            c.first_name || ' ' || c.last_name AS \"customer_name!\",\n            o.status,\n            -- Widen before multiplying: INTEGER * INTEGER overflows past ~$21.4M.\n            COALESCE(SUM(oi.quantity::bigint * oi.unit_price_cents), 0)::bigint AS \"total_cents!\",\n            o.created_at,\n            o.updated_at\n        FROM orders o\n        JOIN customers c ON c.id = o.customer_id\n        LEFT JOIN order_items oi ON oi.order_id = o.id\n        WHERE ($1::text IS NULL AND $2::bigint IS NULL)\n           OR o.id = $2\n           OR c.first_name || ' ' || c.last_name ILIKE $1\n        GROUP BY o.id, c.first_name, c.last_name\n        ORDER BY o.created_at DESC, o.id DESC\n        LIMIT $3 OFFSET $4\n        ",
   "describe": {
     "columns": [
       {
@@ -73,6 +73,8 @@
     ],
     "parameters": {
       "Left": [
+        "Text",
+        "Int8",
         "Int8",
         "Int8"
       ]
@@ -87,5 +89,5 @@
       false
     ]
   },
-  "hash": "697abb2f6c765e6f85b9e2a6c668ccb9c96beefbf681bc2c268505673cbe5c7e"
+  "hash": "dd87116df33f163f210db1dd5b50c8c2999e7acf797e456d0f3bd68d019e70be"
 }

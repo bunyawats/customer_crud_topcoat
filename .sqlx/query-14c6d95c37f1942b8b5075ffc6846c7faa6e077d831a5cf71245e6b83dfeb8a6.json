@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO list_filters (session_hash, resource, criteria)\n        VALUES ($1, $2, $3::text::jsonb)\n        ON CONFLICT (session_hash, resource)\n        DO UPDATE SET criteria = EXCLUDED.criteria, updated_at = now()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "14c6d95c37f1942b8b5075ffc6846c7faa6e077d831a5cf71245e6b83dfeb8a6"
+}

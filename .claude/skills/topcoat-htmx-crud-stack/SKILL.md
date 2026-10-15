@@ -196,8 +196,28 @@ Gotchas hit while building it (each cost a compile or test cycle):
 - A boolean attribute renders as `disabled=""`; tests must match that exact string, since Tailwind
   class lists contain `disabled:` variants.
 - `#[serde(flatten)]` with urlencoded forms breaks numeric fields; spell the fields out.
-- Bare `<tr>` outerHTML swaps (the edit-row flow) work in Chrome with htmx 4.0.0, despite the
-  `htmx4` skill's §1 warning; new list swaps still target `<div>` regions.
+- Bare `<tr>` outerHTML swaps (the edit-row flow) work in Chrome with htmx 4.0.0: a `<tr>` that
+  is the response's first element survives (`htmx4` skill §1); new list swaps still target
+  `<div>` regions.
+
+## Search criteria kept server-side
+
+Design and as-built notes: `docs/SEARCH_FILTER_PLAN.md`. The criteria are a domain
+`filter::ListFilter` (serde; new criteria = new `#[serde(default)]` fields), stored per session
+and list in `list_filters` like the selection:
+- **One writer:** `POST /<res>/search` (`app::save_filter`; an empty `q` clears and starts no
+  session). Every list re-render reads `app::list_filter(cx, RESOURCE)` and passes it to
+  `service::list_page(pool, request, &filter)`; nothing else accepts criteria from the client.
+- `ListFilter::cache_key(base)` is the count cache's `filter_key`, so a `query_id` minted under
+  other criteria recomputes.
+- The search box (`ui::search_form`) has its own region `#<res>-search` outside the list and the
+  toolbar, so their re-renders never clobber typing. Its "Clear" button sits outside the `<form>`:
+  inside, htmx would also send the typed text alongside `hx-vals`.
+- A stored row that no longer deserializes fails open to "no filter" (logged), never a 500.
+- A list `#[page]` visit keeps the filter but clears the ticks; create clears the filter.
+- Postgres `LIKE`'s default escape is `\`: `Search::like_pattern` escapes `\`, `%`, `_`. Pass JSON
+  as text (`$1::text::jsonb`, `criteria::text`) to avoid enabling sqlx's `json` feature.
+- Tests: a row checkbox's `hx-vals` contains `event.target.checked`, so assert ` checked=""`.
 
 ## Dynamic repeatable form rows (order line items)
 

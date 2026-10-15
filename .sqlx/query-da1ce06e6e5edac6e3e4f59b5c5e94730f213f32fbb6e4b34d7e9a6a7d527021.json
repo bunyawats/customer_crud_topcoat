@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM list_filters WHERE updated_at < now() - make_interval(secs => $1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "da1ce06e6e5edac6e3e4f59b5c5e94730f213f32fbb6e4b34d7e9a6a7d527021"
+}

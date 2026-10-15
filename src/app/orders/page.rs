@@ -9,7 +9,7 @@ use topcoat::{
 
 use super::{OrderRow, RESOURCE, order_list};
 use crate::{
-    app::{PageForm, pool, selected_ids},
+    app::{PageForm, list_filter, pool, selected_ids},
     order::services as service,
 };
 
@@ -17,11 +17,12 @@ use crate::{
 /// total while the posted `query_id` is still valid.
 #[route(POST)]
 pub(crate) async fn show_page(cx: &Cx, Form(form): Form<PageForm>) -> Result<ViewHandle> {
-    let listing = service::list_page(pool(cx), form.request())
+    let filter = list_filter(cx, RESOURCE).await?;
+    let listing = service::list_page(pool(cx), form.request(), &filter)
         .await?
         .map(OrderRow::from);
     let selected = selected_ids(cx, RESOURCE).await?;
-    view! { cx => order_list(listing: listing, selected: &selected) }
+    view! { cx => order_list(listing: listing, filter: &filter, selected: &selected) }
         .single()
         .await
 }

@@ -10,7 +10,7 @@ use topcoat::{
 
 use super::{ProductRow, RESOURCE, product_list, product_toolbar};
 use crate::{
-    app::{SelectionForm, apply_selection, pool},
+    app::{SelectionForm, apply_selection, list_filter, pool},
     product::services as service,
 };
 
@@ -23,12 +23,13 @@ pub(crate) async fn update_selection(
     Form(form): Form<SelectionForm>,
 ) -> Result<ViewHandle> {
     let selected = apply_selection(cx, RESOURCE, &form).await?;
-    let listing = service::list_page(pool(cx), form.page_request())
+    let filter = list_filter(cx, RESOURCE).await?;
+    let listing = service::list_page(pool(cx), form.page_request(), &filter)
         .await?
         .map(ProductRow::from);
     view! {
         cx =>
-        product_list(listing: listing, selected: &selected)
+        product_list(listing: listing, filter: &filter, selected: &selected)
         product_toolbar(count: selected.len(), oob: true)
     }
     .single()

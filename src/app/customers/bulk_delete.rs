@@ -13,7 +13,7 @@ use topcoat::{
 
 use super::{CustomerRow, RESOURCE, bulk_items, customer_list, customer_toolbar};
 use crate::{
-    app::{PageForm, pool, session_key},
+    app::{PageForm, list_filter, pool, session_key},
     customer::services as service,
     selection::services as selection,
     ui::{self, BulkFailure},
@@ -59,7 +59,8 @@ pub(crate) async fn execute_bulk_delete(cx: &Cx, Form(form): Form<PageForm>) -> 
         })
         .collect();
 
-    let listing = service::list_page(pool(cx), form.after_write())
+    let filter = list_filter(cx, RESOURCE).await?;
+    let listing = service::list_page(pool(cx), form.after_write(), &filter)
         .await?
         .map(CustomerRow::from);
     let selected = HashSet::new();
@@ -71,7 +72,7 @@ pub(crate) async fn execute_bulk_delete(cx: &Cx, Form(form): Form<PageForm>) -> 
             deleted: deleted,
             failures: &failures
         )
-        customer_list(listing: listing, selected: &selected, oob: true)
+        customer_list(listing: listing, filter: &filter, selected: &selected, oob: true)
         customer_toolbar(count: 0, oob: true)
     }
     .single()

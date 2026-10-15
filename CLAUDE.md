@@ -13,8 +13,8 @@ design, testing, UI patterns, and the Topcoat gotchas behind them). The user-glo
 `tailwindcss4` and `rust-best-practices` in `~/.claude/skills/` still apply. This file only states
 what's specific to *this* project.
 
-## Lists: pagination, selection, bulk delete
-All three lists page 10 rows at a time, keep a server-side multi-select, and bulk delete. The
+## Lists: pagination, selection, bulk delete, search
+All three lists page 10 rows at a time, keep a server-side multi-select, bulk delete, and search. The
 decisions, as-built notes and gotchas live in
 **[`docs/PAGINATION_BULK_ACTIONS_PLAN.md`](docs/PAGINATION_BULK_ACTIONS_PLAN.md)**; read its
 "As built" notes before changing a list page. The essentials:
@@ -30,6 +30,14 @@ decisions, as-built notes and gotchas live in
   server-side and never trust ids from the client.
 - **Bulk delete:** `src/bulk.rs` fans out over the resource's own `services::delete`, so its guards
   report per item; at most `bulk::MAX_BATCH` (100) ids.
+- **Search:** decisions and as-built notes in
+  **[`docs/SEARCH_FILTER_PLAN.md`](docs/SEARCH_FILTER_PLAN.md)**. Criteria are a `filter::ListFilter`
+  stored server-side per session and list (`list_filters`, `src/filter/`). Only
+  `POST /<res>/search` accepts them (`app::save_filter`); every list re-render reads them with
+  `app::list_filter`, so `#<res>-list-state` stays `page`/`query_id` and services' `list_page`
+  takes the filter. The box lives in `#<res>-search`, outside the list and toolbar. A list visit
+  keeps the filter (clears only the ticks); create clears it. New criteria = new
+  `#[serde(default)]` fields on `ListFilter`.
 - htmx v4 sends `DELETE` parameters in the **query string**: read them with `#[query_params]`
   (`app::page_after_write`), not `Form<T>`.
 
@@ -118,8 +126,9 @@ src/
   app/<resources>/page.rs        # POST .../page        (Prev/Next: list region)
   app/<resources>/selection.rs   # POST .../selection   (checkbox / select-all)
   app/<resources>/bulk_delete.rs # POST .../bulk-delete (+ bulk_delete/confirm.rs: the confirm dialog)
+  app/<resources>/search.rs      # POST .../search      (store the filter, list page 1)
   pagination.rs  bulk.rs         # shared domain helpers: Page/count cache; batch prep + fan-out
-  selection/                     # domain: server-side selection store (no HTTP types)
+  selection/  filter/            # domain: server-side selection and search-criteria stores (no HTTP types)
 ```
 
 1. **Web tree (`src/app/`)** - extraction (`Form<T>`, `path_param`), handlers, view models

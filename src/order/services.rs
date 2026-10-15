@@ -3,6 +3,7 @@ use sqlx::PgPool;
 use crate::bulk::{self, BulkResult};
 use crate::customer::services as customer_service;
 use crate::error::AppError;
+use crate::filter::ListFilter;
 use crate::pagination::{self, PAGE_SIZE, Page, PageRequest};
 use crate::product::services as product_service;
 
@@ -11,19 +12,43 @@ use super::models::{
 };
 use super::repositories as repo;
 
-/// One page of the list, reusing the cached total when `request` carries a
-/// still-valid `query_id`.
+/// One page of the list under `filter` (an order number, or part of the
+/// customer's name), reusing the cached total when `request` carries a
+/// `query_id` minted for the same filter.
 pub async fn list_page(
     pool: &PgPool,
     request: PageRequest,
+    filter: &ListFilter,
 ) -> Result<Page<OrderSummary>, AppError> {
+    let pattern = filter.search.like_pattern();
+    let pattern = pattern.as_deref();
+    let order_id = filter.search.order_id();
     pagination::fetch_page(
         request,
-        "orders",
-        async || Ok(repo::count(pool).await?),
-        async |limit, offset| Ok(repo::list_page(pool, limit, offset).await?),
+        &filter.cache_key("orders"),
+        async || Ok(repo::count(pool, pattern, order_id).await?),
+        async |limit, offset| Ok(repo::list_page(pool, pattern, order_id, limit, offset).await?),
     )
     .await
+}
+
+/// How many of `ids` the list hides under `filter` (for the bulk-delete
+/// confirm: selected rows outside the current search). Pass ids that
+/// still exist: a missing id counts as hidden.
+pub async fn count_outside(
+    pool: &PgPool,
+    ids: &[i64],
+    filter: &ListFilter,
+) -> Result<usize, AppError> {
+    if filter.is_empty() {
+        return Ok(0);
+    }
+    let pattern = filter.search.like_pattern();
+    let order_id = filter.search.order_id();
+    let matching = repo::count_matching_ids(pool, ids, pattern.as_deref(), order_id).await?;
+    Ok(ids
+        .len()
+        .saturating_sub(usize::try_from(matching).unwrap_or(0)))
 }
 
 /// The 1-based page that shows order `id` (e.g. a just-created record).

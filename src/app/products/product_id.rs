@@ -11,7 +11,7 @@ use topcoat::{
 
 use super::{ProductRow, RESOURCE, product_list, product_row, product_toolbar};
 use crate::{
-    app::{page_after_write, pool, selected_ids},
+    app::{list_filter, page_after_write, pool, selected_ids},
     product::{models::ProductForm, services as service},
     selection::services as selection,
 };
@@ -49,13 +49,14 @@ pub(crate) async fn delete(cx: &Cx) -> Result<ViewHandle> {
     let id = id(cx)?;
     service::delete(pool(cx), id).await?;
     selection::forget_item(pool(cx), RESOURCE, id).await?;
-    let listing = service::list_page(pool(cx), page_after_write(cx)?)
+    let filter = list_filter(cx, RESOURCE).await?;
+    let listing = service::list_page(pool(cx), page_after_write(cx)?, &filter)
         .await?
         .map(ProductRow::from);
     let selected = selected_ids(cx, RESOURCE).await?;
     view! {
         cx =>
-        product_list(listing: listing, selected: &selected)
+        product_list(listing: listing, filter: &filter, selected: &selected)
         product_toolbar(count: selected.len(), oob: true)
     }
     .single()
