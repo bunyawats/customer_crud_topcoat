@@ -57,7 +57,9 @@ static/input.css, static/app.js        Tailwind source and the small dialog/line
 ```
 
 `CLAUDE.md` and `.claude/skills/topcoat-htmx-crud-stack/` describe the architecture and conventions
-in detail.
+in detail. Diagrams: [`docs/architecture.md`](docs/architecture.md) (runtime, build tooling,
+modules), [`docs/interaction-diagrams/`](docs/interaction-diagrams/README.md) (every endpoint) and
+[`docs/er-diagram.md`](docs/er-diagram.md) (database schema).
 
 ### What changed from the Axum version
 

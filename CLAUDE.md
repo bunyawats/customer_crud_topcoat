@@ -68,6 +68,8 @@ keep class names as string literals so Tailwind's scanner finds them.
 - Format: `cargo fmt` and `topcoat fmt` (formats `view!` bodies)
 - Run without the dev server: `topcoat asset bundle && cargo run`
 - Migrations: `sqlx database create` (first time), then `sqlx migrate run`; after any query/schema change, `cargo sqlx prepare` and commit `.sqlx/`
+- Schema: [`docs/er-diagram.md`](docs/er-diagram.md) (ER diagram, delete rules, money rules). Update it in
+  the same change as any new migration.
 - Dev sample data: `psql "$DATABASE_URL" -f seeds/dev.sql` (idempotent; kept out of `migrations/` so
   `#[sqlx::test]` databases start empty)
 
@@ -99,7 +101,10 @@ keep class names as string literals so Tailwind's scanner finds them.
 ---
 
 ## Codebase Architecture
-Two trees (rationale in the playbook):
+Diagrams (runtime, build tooling, module dependencies):
+[`docs/architecture.md`](docs/architecture.md). Every endpoint, one sequence diagram per file:
+[`docs/interaction-diagrams/`](docs/interaction-diagrams/README.md); add a file there for each new
+route. Two trees (rationale in the playbook):
 
 ```
 src/
