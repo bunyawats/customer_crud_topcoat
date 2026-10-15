@@ -13,6 +13,12 @@ design, testing, UI patterns, and the Topcoat gotchas behind them). The user-glo
 `tailwindcss4` and `rust-best-practices` in `~/.claude/skills/` still apply. This file only states
 what's specific to *this* project.
 
+## Work in progress
+Pagination + multi-select + bulk delete for all three lists is planned, not built:
+**[`docs/PAGINATION_BULK_ACTIONS_PLAN.md`](docs/PAGINATION_BULK_ACTIONS_PLAN.md)** holds the
+decisions, design, checkbox-tracked tasks and session log. Read it before touching list pages, and
+resume from its first unticked task.
+
 ## Technology Stack
 - **Framework:** Topcoat 0.10 (module routing, `view!` components, layouts/layers, assets). Needs Rust 1.98+.
 - **Async runtime:** Tokio
