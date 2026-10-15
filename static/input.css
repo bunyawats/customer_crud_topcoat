@@ -1,0 +1,95 @@
+/* Markup lives in `view!` macros in Rust source, so scan only src/ (not
+   target/, which Topcoat's build script would otherwise also see). */
+@import "tailwindcss" source(none);
+@source "../src";
+
+/*
+ * Design tokens - a "customer ledger" concept: cool paper, restrained
+ * serif headings, monospace for record data (dates, phone numbers), and a
+ * deep forest-green brand color instead of a generic default palette.
+ */
+@theme {
+    --color-paper: #f5f6f8;
+    --color-surface: #ffffff;
+    --color-ink: #16202a;
+    --color-muted: #5b6572;
+    --color-line: #d8dce2;
+
+    --color-brand: #2f5d50;
+    --color-brand-hover: #24463c;
+    --color-brand-tint: #e7efec;
+
+    --color-danger: #b3261e;
+    --color-danger-tint: #fbeae9;
+
+    --font-display: "Fraunces", ui-serif, Georgia, serif;
+    --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/*
+ * Dialog open/close transition. Plain CSS (not utilities) because it needs
+ * `@starting-style`/`::backdrop`, which don't have Tailwind class
+ * equivalents. `allow-discrete` lets a [display: none] element transition
+ * instead of popping instantly.
+ */
+.dialog-anim {
+    opacity: 0;
+    scale: 0.97;
+    transition:
+        opacity 0.15s ease,
+        scale 0.15s ease,
+        overlay 0.15s ease allow-discrete,
+        display 0.15s ease allow-discrete;
+}
+
+.dialog-anim[open] {
+    opacity: 1;
+    scale: 1;
+}
+
+.dialog-anim::backdrop {
+    opacity: 0;
+    transition:
+        opacity 0.15s ease,
+        overlay 0.15s ease allow-discrete,
+        display 0.15s ease allow-discrete;
+}
+
+.dialog-anim[open]::backdrop {
+    opacity: 1;
+}
+
+@starting-style {
+    .dialog-anim[open] {
+        opacity: 0;
+        scale: 0.97;
+    }
+
+    .dialog-anim[open]::backdrop {
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dialog-anim,
+    .dialog-anim::backdrop {
+        transition: none;
+    }
+}
+
+/*
+ * Sidebar nav links. The active-item left accent bar reuses the same motif
+ * as the table row hover state (see `row_actions`/row components in src/) - one
+ * signature detail carried consistently across the app rather than a new
+ * one invented per component.
+ */
+@layer components {
+    .nav-link {
+        @apply block rounded-r-lg border-l-2 border-l-transparent px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-brand-tint hover:text-ink;
+    }
+
+    .nav-link-active {
+        @apply border-l-brand bg-brand-tint text-brand;
+    }
+}

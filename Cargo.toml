@@ -1,0 +1,34 @@
+[package]
+name = "customer_crud_topcoat"
+version = "0.1.0"
+edition = "2024"
+# Topcoat 0.10 requires Rust 1.98+.
+rust-version = "1.98"
+
+[dependencies]
+chrono = { version = "0.4.45", features = ["serde"] }
+dotenvy = "0.15.7"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+sqlx = { version = "0.9.0", features = ["postgres", "runtime-tokio", "tls-rustls", "chrono"] }
+tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros"] }
+topcoat = { version = "0.10.0", default-features = false, features = [
+    "router",
+    "serve",
+    "discover",
+    "asset",
+    "htmx",
+    "tailwind",
+] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+
+[build-dependencies]
+topcoat = { version = "0.10.0", default-features = false, features = ["tailwind"] }
+
+[dev-dependencies]
+serde_urlencoded = "0.7.1"
+# Only for the test harness: bundles the test binary's own `asset!`
+# declarations (the Tailwind stylesheet, app.js) so pages that render them
+# don't panic. See `tests/common/mod.rs`.
+topcoat-asset = { version = "0.10.0", features = ["bundler"] }
