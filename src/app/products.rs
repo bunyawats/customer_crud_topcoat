@@ -27,7 +27,7 @@ use crate::{
         services as service,
     },
     selection::models::Resource,
-    ui::{self, INPUT, PagerInfo},
+    ui::{self, ACTIONS_COLUMN, Column, INPUT, PagerInfo},
 };
 use product_id::ProductId;
 
@@ -38,6 +38,31 @@ pub(crate) const RESOURCE: Resource = Resource::Products;
 /// Id of the selection toolbar above the list (sent out-of-band on changes).
 pub(crate) const TOOLBAR_ID: &str = "product-toolbar";
 const LIST_TARGET: &str = "#product-list";
+/// Columns after the selection box. Fixed widths for the short, regular
+/// data; name and description share the rest.
+const COLUMNS: &[Column] = &[
+    Column {
+        label: "Name",
+        width: "",
+    },
+    Column {
+        label: "SKU",
+        width: "w-32",
+    },
+    Column {
+        label: "Price",
+        width: "w-32",
+    },
+    Column {
+        label: "Description",
+        width: "",
+    },
+    Column {
+        label: "Added",
+        width: "w-32",
+    },
+    ACTIONS_COLUMN,
+];
 
 /// Flat, owned view model for a single table row.
 pub(crate) struct ProductRow {
@@ -126,7 +151,7 @@ pub(crate) async fn product_list(
             )
             ui::table_card(
                 ui::table_head(
-                    columns: &["Name", "SKU", "Price", "Description", "Added", ""],
+                    columns: COLUMNS,
                     ui::select_all_checkbox(
                         ids: &page_ids,
                         checked: all_selected,
@@ -226,13 +251,20 @@ pub(crate) async fn product_row(
                 select_url: &select_url,
                 list_id: LIST_ID
             )
-            <td class="px-4 py-3 font-medium">(&product.name)</td>
-            <td class="px-4 py-3 font-mono text-xs text-muted">(&product.sku)</td>
+            <td class="truncate px-4 py-3 font-medium" title=(&product.name)>
+                (&product.name)
+            </td>
+            <td
+                class="truncate px-4 py-3 font-mono text-xs text-muted"
+                title=(&product.sku)
+            >
+                (&product.sku)
+            </td>
             <td class="px-4 py-3 font-mono text-xs tabular-nums text-muted">
                 (&product.price_display)
             </td>
             <td
-                class="max-w-[16rem] truncate px-4 py-3 text-muted"
+                class="truncate px-4 py-3 text-muted"
                 title=(product.description.as_deref())
             >
                 (product.description.as_deref().unwrap_or("—"))

@@ -253,12 +253,24 @@ Same table for `/products` and `/orders`. Delete guards already produce
   `cargo fmt --check` flagged only `src/customer/models.rs` line 1 (whitespace added in the user's
   IDE); on the user's say-so it was restored to its committed form, then everything committed.
 
-## Follow-ups (not planned work)
+- **2026-10-15 (follow-ups session):** all four follow-ups closed, see below. Measured in Chrome at
+  1100px: with auto layout the products Name/Description columns went 298/280px on page 1 and
+  229/348px on page 2; with `table-fixed` both pages are 289/289. Surprise: `topcoat dev`'s live
+  reload re-loads an open list tab after every rebuild, and a list `#[page]` visit clears the
+  selection, so editing code while a selection is ticked wipes it. Expected, but don't mistake it
+  for a bug. 102 tests, clippy green.
 
-- Column widths shift between pages (auto table layout): `table-fixed` + widths.
-- The global `htmx4` skill's §1 (bare `<tr>` swaps get stripped) didn't reproduce here; worth
-  narrowing, with the user's OK.
-- The global `topcoat` skill could gain the `AsyncFn`/`Send`, `DELETE`-params-in-query and
-  `topcoat::session` cookie notes above, with the user's OK.
-- CLAUDE.md says repositories never return `sqlx::Error`, but every repository (old and new) does,
-  and services convert. Either reword the rule or change the code.
+## Follow-ups (done 2026-10-15)
+
+- [x] Column widths shifted between pages (auto table layout). Now `ui::table_card` renders
+  `table-fixed` (`min-w-3xl`, the card scrolls below that) and each list declares its header
+  widths as `ui::Column`s (`COLUMNS` in `app/<res>.rs`, plus `ui::ACTIONS_COLUMN`). Text cells that
+  can be long `truncate` with a `title`. Test: `pagination_routes::lists_use_fixed_column_widths`.
+- [x] The global `htmx4` skill's §1 is narrowed. Bundle + Chrome check: htmx parses fragments as
+  `<template>${response}</template>`, and a `<tr>` survives when it is the first element; it is
+  stripped only when another element (e.g. an OOB `<div>`) comes before it.
+- [x] The global `topcoat` skill already had the `AsyncFn`/`Send`, `DELETE`-params-in-query and
+  `topcoat::session` cookie notes (added earlier the same day).
+- [x] CLAUDE.md's error rule reworded to match the code: repositories return `sqlx::Error`,
+  services return `AppError` and convert with `?`; nothing above the services sees `sqlx::Error`.
+  The `AppError` doc comment in `src/error.rs` says the same.

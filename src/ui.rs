@@ -191,23 +191,43 @@ pub async fn page_header(title: &str, add_label: &str, new_url: &str) -> Result<
 }
 
 /// The bordered table card. `child` is the `<thead>` + `<tbody id="rows-body">`.
+///
+/// `table-fixed`: column widths come from the header (see [`Column`]), not
+/// from each page's content, so they don't jump on Prev/Next. Cells that can
+/// hold long text must `truncate`. Below `min-w-3xl` the card scrolls.
 #[component]
 pub async fn table_card(#[default] child: Child<'_>) -> Result<impl View> {
     Ok(view! {
         <div
-            class="mt-6 overflow-hidden rounded-xl border border-line bg-surface shadow-sm"
+            class="mt-6 overflow-x-auto rounded-xl border border-line bg-surface shadow-sm"
         >
-            <table class="w-full border-collapse text-sm">(child)</table>
+            <table class="w-full min-w-3xl table-fixed border-collapse text-sm">
+                (child)
+            </table>
         </div>
     })
 }
 
-/// A `<thead>` row from column labels. An empty label renders a
+/// One header column: its label and its width classes. An empty `width`
+/// shares out whatever the fixed columns leave. Keep widths as string
+/// literals so Tailwind's scanner finds them.
+pub struct Column {
+    pub label: &'static str,
+    pub width: &'static str,
+}
+
+/// The trailing row-actions column ([`row_actions`]): two icon buttons.
+pub const ACTIONS_COLUMN: Column = Column {
+    label: "",
+    width: "w-24",
+};
+
+/// A `<thead>` row from columns. An empty label renders a
 /// screen-reader-only "Actions" header. `child` fills the leading selection
 /// column (the "select all on this page" checkbox).
 #[component]
 pub async fn table_head(
-    columns: &'static [&'static str],
+    columns: &'static [Column],
     #[default] child: Child<'_>,
 ) -> Result<impl View> {
     Ok(view! {
@@ -217,11 +237,11 @@ pub async fn table_head(
             >
                 <th class="w-10 py-3 pl-4">(child)</th>
                 for column in columns {
-                    <th class="px-4 py-3 font-medium">
-                        if column.is_empty() {
+                    <th class=(class!("px-4 py-3 font-medium", column.width))>
+                        if column.label.is_empty() {
                             <span class="sr-only">"Actions"</span>
                         } else {
-                            (*column)
+                            (column.label)
                         }
                     </th>
                 }

@@ -30,7 +30,7 @@ use crate::{
     pagination::{Page, PageRequest},
     product::services as product_service,
     selection::models::Resource,
-    ui::{self, PagerInfo, SELECT},
+    ui::{self, ACTIONS_COLUMN, Column, PagerInfo, SELECT},
 };
 use order_id::OrderId;
 
@@ -41,6 +41,31 @@ pub(crate) const RESOURCE: Resource = Resource::Orders;
 /// Id of the selection toolbar above the list (sent out-of-band on changes).
 pub(crate) const TOOLBAR_ID: &str = "order-toolbar";
 const LIST_TARGET: &str = "#order-list";
+/// Columns after the selection box. Fixed widths for the short, regular
+/// data; the customer name takes the rest.
+const COLUMNS: &[Column] = &[
+    Column {
+        label: "Order",
+        width: "w-24",
+    },
+    Column {
+        label: "Customer",
+        width: "",
+    },
+    Column {
+        label: "Status",
+        width: "w-32",
+    },
+    Column {
+        label: "Total",
+        width: "w-36",
+    },
+    Column {
+        label: "Placed",
+        width: "w-32",
+    },
+    ACTIONS_COLUMN,
+];
 
 /// Flat, owned view model for a single order row.
 pub(crate) struct OrderRow {
@@ -127,7 +152,7 @@ pub(crate) async fn order_list(
             )
             ui::table_card(
                 ui::table_head(
-                    columns: &["Order", "Customer", "Status", "Total", "Placed", ""],
+                    columns: COLUMNS,
                     ui::select_all_checkbox(
                         ids: &page_ids,
                         checked: all_selected,
@@ -232,7 +257,9 @@ pub(crate) async fn order_row(cx: &Cx, order: &OrderRow, selected: bool) -> Resu
                 "#"
                 (order.id)
             </td>
-            <td class="px-4 py-3 font-medium">(&order.customer_name)</td>
+            <td class="truncate px-4 py-3 font-medium" title=(&order.customer_name)>
+                (&order.customer_name)
+            </td>
             <td class="px-4 py-3">
                 <span
                     class=(class!(

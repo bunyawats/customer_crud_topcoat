@@ -238,3 +238,26 @@ async fn product_form_still_creates_into_the_list(pool: PgPool) {
     assert!(response.body.contains("id=\"product-list\""));
     assert!(response.body.contains("W-1"));
 }
+
+/// Column widths come from the header, not each page's rows, so they stay put
+/// across Prev/Next: every list renders a fixed-layout table with sized `<th>`s,
+/// on the full page and on the paged fragment alike.
+#[sqlx::test]
+async fn lists_use_fixed_column_widths(pool: PgPool) {
+    let app = App::new(pool);
+    seed_customers(&app, 11).await;
+
+    for (resource, sized_header) in [
+        ("customers", "w-40\">Phone</th>"),
+        ("products", "w-32\">SKU</th>"),
+        ("orders", "w-24\">Order</th>"),
+    ] {
+        let body = app.get(&format!("/{resource}")).await.body;
+        assert!(body.contains("table-fixed"), "{resource}: {body}");
+        assert!(body.contains(sized_header), "{resource}: {body}");
+    }
+
+    let body = page(&app, "customers", 2, "").await;
+    assert!(body.contains("table-fixed"), "{body}");
+    assert!(body.contains("w-40\">Phone</th>"), "{body}");
+}

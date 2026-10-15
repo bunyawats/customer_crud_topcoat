@@ -140,7 +140,9 @@ named `form` or a page named `index` breaks local bindings with those names (hit
 ---
 
 ## Error Handling Protocol (the unified AppError)
-- Services and repositories return `AppError` (`src/error.rs`), never `sqlx::Error` or responses.
+- Repositories return `sqlx::Error`; services return `AppError` (`src/error.rs`) and convert with `?`
+  (`From<sqlx::Error>`). Nothing above the services sees `sqlx::Error`, and neither layer returns
+  responses.
   Unique-constraint names map to friendly messages in `unique_violation_message` - add an arm for
   each new UNIQUE constraint.
 - Handlers use `?`. The `handle_errors` layer in `src/app.rs` turns `AppError`, `NotFoundError` and

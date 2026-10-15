@@ -2,9 +2,9 @@ use std::fmt;
 
 use topcoat::router::StatusCode;
 
-/// Centralized domain error type. Services and repositories never leak
-/// `sqlx::Error` or return web-framework responses directly - errors are
-/// caught and converted into this enum.
+/// Centralized domain error type. Repositories return `sqlx::Error`, and
+/// services convert it into this enum with `?`, so `sqlx::Error` never
+/// leaks past the services and neither layer builds web responses.
 ///
 /// Route handlers bubble it up with `?` (it converts into `topcoat::Error`
 /// like any `std::error::Error`), and the root `#[layer]` in `src/app.rs`

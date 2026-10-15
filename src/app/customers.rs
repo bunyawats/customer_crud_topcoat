@@ -27,7 +27,7 @@ use crate::{
     error::AppError,
     pagination::{Page, PageRequest},
     selection::models::Resource,
-    ui::{self, INPUT, PagerInfo},
+    ui::{self, ACTIONS_COLUMN, Column, INPUT, PagerInfo},
 };
 use customer_id::CustomerId;
 
@@ -38,6 +38,27 @@ pub(crate) const RESOURCE: Resource = Resource::Customers;
 /// Id of the selection toolbar above the list (sent out-of-band on changes).
 pub(crate) const TOOLBAR_ID: &str = "customer-toolbar";
 const LIST_TARGET: &str = "#customer-list";
+/// Columns after the selection box. Fixed widths for the short, regular
+/// data; name and email share the rest.
+const COLUMNS: &[Column] = &[
+    Column {
+        label: "Name",
+        width: "",
+    },
+    Column {
+        label: "Email",
+        width: "",
+    },
+    Column {
+        label: "Phone",
+        width: "w-40",
+    },
+    Column {
+        label: "Member since",
+        width: "w-36",
+    },
+    ACTIONS_COLUMN,
+];
 
 /// Flat, owned view model for a single table row: the components render
 /// this rather than the domain `Customer`, with dates already formatted.
@@ -125,7 +146,7 @@ pub(crate) async fn customer_list(
             )
             ui::table_card(
                 ui::table_head(
-                    columns: &["Name", "Email", "Phone", "Member since", ""],
+                    columns: COLUMNS,
                     ui::select_all_checkbox(
                         ids: &page_ids,
                         checked: all_selected,
@@ -230,9 +251,11 @@ pub(crate) async fn customer_row(
                 select_url: &select_url,
                 list_id: LIST_ID
             )
-            <td class="px-4 py-3 font-medium">(&name)</td>
-            <td class="px-4 py-3 text-muted">(&customer.email)</td>
-            <td class="px-4 py-3 font-mono text-xs text-muted">
+            <td class="truncate px-4 py-3 font-medium" title=(&name)>(&name)</td>
+            <td class="truncate px-4 py-3 text-muted" title=(&customer.email)>
+                (&customer.email)
+            </td>
+            <td class="truncate px-4 py-3 font-mono text-xs text-muted">
                 (customer.phone.as_deref().unwrap_or("—"))
             </td>
             <td class="px-4 py-3 text-right font-mono text-xs tabular-nums text-muted">
