@@ -130,10 +130,11 @@ cache key to `fetch_page`. `position_of` (create only) stays unfiltered. `ORDER 
   an overlong or non-string stored term fails open to "no filter" (logged at `warn`).
 - `ListFilter::cache_key` appends the filter's JSON to the list name, so new criteria fields join
   the cache key automatically.
-- The search box is `ui::search_form` inside `#<res>-search`; "Clear" sits **outside** the
-  `<form>` so it posts only its own `hx-vals` `q=""` (inside the form, htmx would also send the
-  typed text). Only a clear (and create) re-renders the box, out-of-band; a normal search leaves
-  the box and its focus alone.
+- The search box is `ui::search_form` inside `#<res>-search`; "Clear" sits outside the `<form>`
+  and posts only its `hx-vals` `q=""`. (Inside would also work in htmx 4.0.0: a POST button sends
+  its form's fields, but `hx-vals` then overwrites same-named keys with `body.set`, bundle
+  `htmx.js` ~line 489. Outside is just simpler to reason about.) Only a clear (and create)
+  re-renders the box, out-of-band; a normal search leaves the box and its focus alone.
 - The bulk confirm's "N of these aren't in the current search" uses each service's
   `count_outside`, one more filtered query per resource (`count_matching_ids`), only run when a
   filter is set.

@@ -211,8 +211,9 @@ and list in `list_filters` like the selection:
 - `ListFilter::cache_key(base)` is the count cache's `filter_key`, so a `query_id` minted under
   other criteria recomputes.
 - The search box (`ui::search_form`) has its own region `#<res>-search` outside the list and the
-  toolbar, so their re-renders never clobber typing. Its "Clear" button sits outside the `<form>`:
-  inside, htmx would also send the typed text alongside `hx-vals`.
+  toolbar, so their re-renders never clobber typing. Its "Clear" button sits outside the `<form>`
+  and posts only `hx-vals` `q=""`. (Inside works too in htmx 4.0.0: a POST button sends its
+  form's fields, but `hx-vals` overwrites same-named keys.)
 - A stored row that no longer deserializes fails open to "no filter" (logged), never a 500.
 - A list `#[page]` visit keeps the filter but clears the ticks; create clears the filter.
 - Postgres `LIKE`'s default escape is `\`: `Search::like_pattern` escapes `\`, `%`, `_`. Pass JSON

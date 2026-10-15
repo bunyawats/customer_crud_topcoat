@@ -314,8 +314,9 @@ pub async fn row_actions(
 /// toolbar so their re-renders never touch what the user typed. Enter or
 /// "Search" posts `q` to `url` (`POST /<resource>/search`), which stores it
 /// server-side and returns `#<list_id>`; nothing else ever sends criteria.
-/// "Clear" sits outside the `<form>` so it posts only its own empty `q`,
-/// and its response re-renders this region (`oob`) with an empty box.
+/// "Clear" posts its own empty `q` (`hx-vals` would override the form's
+/// field anyway; outside the `<form>` it simply sends nothing else), and its
+/// response re-renders this region (`oob`) with an empty box.
 #[component]
 pub async fn search_form(
     id: &str,
